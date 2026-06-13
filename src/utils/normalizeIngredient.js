@@ -1,12 +1,19 @@
 const pluralSuffixes = [/ies$/i, /es$/i, /s$/i];
+const replacements = [
+  [/œ/g, "oe"],
+  [/æ/g, "ae"],
+  [/['’]/g, " "]
+];
 
 export function normalizeIngredientName(value = "") {
-  const cleaned = value
+  const normalizedValue = replacements.reduce((text, [pattern, replacement]) => {
+    return text.replace(pattern, replacement);
+  }, value.toLowerCase());
+
+  const cleaned = normalizedValue
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
     .trim()
-    .replace(/['’]/g, " ")
     .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ");
 

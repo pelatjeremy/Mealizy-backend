@@ -22,6 +22,22 @@ export const upsertMealPlan = asyncHandler(async (req, res) => {
   res.status(201).json(plan);
 });
 
+export const updateMealPlan = asyncHandler(async (req, res) => {
+  const plan = await MealPlan.findOneAndUpdate(
+    { _id: req.params.id, userId: req.user._id },
+    req.body,
+    { new: true }
+  );
+
+  if (!plan) {
+    const error = new Error("Meal plan not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  res.json(plan);
+});
+
 export const deleteMealPlan = asyncHandler(async (req, res) => {
   await MealPlan.deleteOne({ _id: req.params.id, userId: req.user._id });
   res.status(204).send();
