@@ -7,6 +7,19 @@ import { addQuantities, normalizeUnit, subtractQuantities } from "../utils/unitC
 
 const suggestionBuckets = ["complete", "missing1", "missing2", "missing3", "missingMore"];
 
+const spoonacularIngredientNames = new Map([
+  ["tomate", "tomato"],
+  ["pate", "pasta"],
+  ["viande hachee", "ground beef"],
+  ["lait", "milk"],
+  ["oeuf", "egg"]
+]);
+
+function debugSuggestions(message, payload) {
+  if (process.env.NODE_ENV === "production") return;
+  console.debug(`[suggestions] ${message}`, payload);
+}
+
 function readNutrient(nutrients = [], names) {
   const nutrient = nutrients.find((item) => names.includes(String(item.name).toLowerCase()));
   return nutrient ? Math.round(Number(nutrient.amount || 0)) : 0;
@@ -115,7 +128,7 @@ export async function getRecipeById(recipeId) {
 async function getInventoryMap(userId) {
   const inventory = await InventoryItem.find({ userId }).populate("ingredientId").lean();
 
-  return inventory.reduce((map, item) => {
+  const map = inventory.reduce((map, item) => {
     const normalizedName = item.normalizedName || item.ingredientId?.normalizedName;
     if (!normalizedName) return map;
 
@@ -132,6 +145,15 @@ async function getInventoryMap(userId) {
     existing.quantity = addQuantities(existing.quantity, existing.unit, item.quantity, item.unit);
     return map;
   }, new Map());
+
+  return { inventoryMap: map, inventoryItemCount: inventory.length };
+}
+
+function getSpoonacularIncludeIngredients(inventoryMap) {
+  return [...inventoryMap.keys()]
+    .slice(0, 20)
+    .map((name) => spoonacularIngredientNames.get(name) || name)
+    .join(",");
 }
 
 function recipeBucket(missingCount) {
@@ -173,27 +195,26 @@ function compareRecipeWithInventory(recipe, inventoryMap, householdSize = 1) {
 }
 
 export async function getRecipeSuggestions(user) {
-  const inventoryMap = await getInventoryMap(user._id);
-  const includeIngredients = [...inventoryMap.keys()].slice(0, 20).join(",");
+  const { inventoryMap, inventoryItemCount } = await getInventoryMap(user._id);
+  const includeIngredients = getSpoonacularIncludeIngredients(inventoryMap);
   const apiRecipes = await searchSpoonacular(undefined, includeIngredients);
-  const fallbackRecipes = apiRecipes.length ? [] : await listRecipes({});
-  const userEquipments = new Set((user.availableEquipments || []).map((equipment) => String(equipment).toLowerCase()));
+  const sourceRecipes = apiRecipes.length ? apiRecipes : demoRecipes.map((recipe) => ({ ...recipe, isDemo: true }));
 
-  return [...apiRecipes, ...fallbackRecipes]
-    .map((recipe) => {
-      const missingEquipments = (recipe.requiredEquipments || []).filter((equipment) => {
-        return !userEquipments.has(String(equipment).toLowerCase());
-      });
-      return {
-        ...compareRecipeWithInventory(recipe, inventoryMap, user.householdSize),
-        missingEquipments,
-        isCompatible: missingEquipments.length === 0
-      };
-    })
-    .filter((recipe) => recipe.isCompatible)
+  const groups = sourceRecipes
+    .map((recipe) => compareRecipeWithInventory(recipe, inventoryMap, user.householdSize))
     .sort((a, b) => a.missingCount - b.missingCount || a.preparationTime - b.preparationTime)
     .reduce((groups, recipe) => {
       groups[recipeBucket(recipe.missingCount)].push(recipe);
       return groups;
     }, Object.fromEntries(suggestionBuckets.map((bucket) => [bucket, []])));
+
+  debugSuggestions("summary", {
+    inventoryItems: inventoryItemCount,
+    uniqueIngredients: inventoryMap.size,
+    recipesFetched: sourceRecipes.length,
+    source: apiRecipes.length ? "spoonacular" : "demo",
+    buckets: Object.fromEntries(suggestionBuckets.map((bucket) => [bucket, groups[bucket].length]))
+  });
+
+  return groups;
 }

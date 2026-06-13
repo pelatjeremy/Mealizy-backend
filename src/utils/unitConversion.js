@@ -1,10 +1,13 @@
 const unitAliases = new Map([
   ["", "unit"],
   ["unit", "unit"],
+  ["units", "unit"],
   ["unite", "unit"],
+  ["unites", "unit"],
   ["unitee", "unit"],
-  ["unités", "unit"],
-  ["unité", "unit"],
+  ["unitees", "unit"],
+  ["unit\u00e9", "unit"],
+  ["unit\u00e9s", "unit"],
   ["piece", "unit"],
   ["pieces", "unit"],
   ["serving", "unit"],
@@ -29,32 +32,22 @@ const unitAliases = new Map([
   ["liters", "l"],
   ["litre", "l"],
   ["litres", "l"],
-  ["tranche", "slice"],
-  ["tranches", "slice"],
-  ["slice", "slice"],
-  ["slices", "slice"],
-  ["boite", "can"],
-  ["boites", "can"],
-  ["can", "can"],
-  ["cans", "can"],
-  ["pot", "jar"],
-  ["pots", "jar"],
-  ["jar", "jar"],
-  ["jars", "jar"],
   ["cuillere a soupe", "tbsp"],
   ["tablespoon", "tbsp"],
   ["tablespoons", "tbsp"],
   ["tbsp", "tbsp"],
+  ["tbsps", "tbsp"],
   ["cuillere a cafe", "tsp"],
   ["teaspoon", "tsp"],
   ["teaspoons", "tsp"],
-  ["tsp", "tsp"]
+  ["tsp", "tsp"],
+  ["tsps", "tsp"]
 ]);
 
 const unitFamilies = {
   weight: { g: 1, kg: 1000 },
   volume: { ml: 1, l: 1000, tbsp: 14.7868, tsp: 4.92892 },
-  count: { unit: 1, slice: 1, can: 1, jar: 1 }
+  count: { unit: 1 }
 };
 
 export function normalizeUnit(unit = "") {
