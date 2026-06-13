@@ -1,27 +1,31 @@
-const pluralSuffixes = [/ies$/i, /es$/i, /s$/i];
-const replacements = [
-  [/œ/g, "oe"],
-  [/æ/g, "ae"],
-  [/['’]/g, " "]
-];
+const irregulars = new Map([
+  ["oeufs", "oeuf"],
+  ["œufs", "oeuf"],
+  ["eggs", "egg"]
+]);
 
-export function normalizeIngredientName(value = "") {
-  const normalizedValue = replacements.reduce((text, [pattern, replacement]) => {
-    return text.replace(pattern, replacement);
-  }, value.toLowerCase());
-
-  const cleaned = normalizedValue
+export function normalizeIngredient(value = "") {
+  const cleaned = String(value)
+    .replace(/œ/g, "oe")
+    .replace(/Œ/g, "oe")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
     .trim()
+    .replace(/['’]/g, " ")
     .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ");
 
   return cleaned
     .split(" ")
-    .map((part) => pluralSuffixes.reduce((name, suffix) => {
-      if (name.length > 3 && suffix.test(name)) return name.replace(suffix, "");
-      return name;
-    }, part))
+    .map((part) => {
+      if (irregulars.has(part)) return irregulars.get(part);
+      if (part.length > 4 && part.endsWith("ies")) return `${part.slice(0, -3)}y`;
+      if (part.length > 4 && /(ches|shes|xes|zes|ses)$/.test(part)) return part.slice(0, -2);
+      if (part.length > 3 && part.endsWith("s")) return part.slice(0, -1);
+      return part;
+    })
     .join(" ");
 }
+
+export const normalizeIngredientName = normalizeIngredient;

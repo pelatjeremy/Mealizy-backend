@@ -5,8 +5,17 @@ import { Ingredient } from "../models/Ingredient.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
 
+async function backfillNormalizedNames(items) {
+  await Promise.all(items.map(async (item) => {
+    if (item.normalizedName || !item.ingredientId?.normalizedName) return;
+    item.normalizedName = item.ingredientId.normalizedName;
+    await item.save();
+  }));
+}
+
 export const listInventory = asyncHandler(async (req, res) => {
   const items = await InventoryItem.find({ userId: req.user._id }).populate("ingredientId").sort({ expirationDate: 1 });
+  await backfillNormalizedNames(items);
   res.json(items);
 });
 
@@ -15,6 +24,7 @@ export const createInventoryItem = asyncHandler(async (req, res) => {
   const item = await InventoryItem.create({
     userId: req.user._id,
     ingredientId: ingredient._id,
+    normalizedName: ingredient.normalizedName,
     quantity: req.body.quantity,
     unit: normalizeUnit(req.body.unit),
     expirationDate: req.body.expirationDate || undefined
@@ -46,6 +56,8 @@ export const updateInventoryItem = asyncHandler(async (req, res) => {
     if (req.body.name) {
       ingredientUpdate.name = req.body.name;
       ingredientUpdate.normalizedName = normalizeIngredientName(req.body.name);
+      item.normalizedName = ingredientUpdate.normalizedName;
+      await item.save();
     }
     if (req.body.category) ingredientUpdate.category = req.body.category;
     await Ingredient.findByIdAndUpdate(item.ingredientId._id, ingredientUpdate);
@@ -68,5 +80,6 @@ export const expiringSoon = asyncHandler(async (req, res) => {
     userId: req.user._id,
     expirationDate: { $gte: now, $lte: limit }
   }).populate("ingredientId").sort({ expirationDate: 1 });
+  await backfillNormalizedNames(items);
   res.json(items);
 });

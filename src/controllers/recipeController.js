@@ -11,18 +11,7 @@ export const searchRecipes = asyncHandler(async (req, res) => {
 });
 
 export const suggestions = asyncHandler(async (req, res) => {
-  const recipes = await getRecipeSuggestions(req.user);
-  res.json({
-    isDemo: !process.env.SPOONACULAR_API_KEY,
-    groups: {
-      complete: recipes.filter((recipe) => recipe.missingCount === 0),
-      missingOne: recipes.filter((recipe) => recipe.missingCount === 1),
-      missingTwo: recipes.filter((recipe) => recipe.missingCount === 2),
-      missingThree: recipes.filter((recipe) => recipe.missingCount === 3),
-      missingMore: recipes.filter((recipe) => recipe.missingCount > 3)
-    },
-    recipes
-  });
+  res.json(await getRecipeSuggestions(req.user));
 });
 
 export const createCustomRecipe = asyncHandler(async (req, res) => {
