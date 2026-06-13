@@ -65,6 +65,23 @@ async function searchSpoonacular(q) {
   }
 }
 
+async function getSpoonacularRecipeById(recipeId) {
+  if (!env.spoonacularApiKey || !/^\d+$/.test(String(recipeId))) return null;
+
+  const params = new URLSearchParams({
+    apiKey: env.spoonacularApiKey,
+    includeNutrition: "true"
+  });
+
+  try {
+    const response = await fetch(`https://api.spoonacular.com/recipes/${recipeId}/information?${params.toString()}`);
+    if (!response.ok) return null;
+    return mapSpoonacularRecipe(await response.json());
+  } catch {
+    return null;
+  }
+}
+
 export async function listRecipes({ q } = {}) {
   const query = q ? { title: { $regex: q, $options: "i" } } : {};
   const [savedRecipes, apiRecipes] = await Promise.all([
@@ -82,6 +99,8 @@ export async function getRecipeById(recipeId) {
   if (String(recipeId).startsWith("demo-")) {
     return demoRecipes.find((recipe) => recipe.externalId === recipeId);
   }
+  const spoonacularRecipe = await getSpoonacularRecipeById(recipeId);
+  if (spoonacularRecipe) return spoonacularRecipe;
   return Recipe.findById(recipeId).lean();
 }
 

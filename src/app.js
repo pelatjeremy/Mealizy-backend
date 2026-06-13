@@ -2,7 +2,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
-import { env } from "./config/env.js";
+import { env, getEnvReadiness } from "./config/env.js";
 import { errorHandler, notFound } from "./middlewares/errorMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
@@ -19,7 +19,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", app: "Mealizy" });
+  res.json({ status: "ok", app: "Mealizy", env: getEnvReadiness() });
 });
 
 app.use("/api/auth", authRoutes);
