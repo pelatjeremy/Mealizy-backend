@@ -63,6 +63,12 @@ function mapSpoonacularRecipe(recipe) {
   };
 }
 
+async function fetchSpoonacularJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  return response.json();
+}
+
 async function searchSpoonacular(q, includeIngredients = "") {
   if (!env.spoonacularApiKey) return [];
 
@@ -81,6 +87,35 @@ async function searchSpoonacular(q, includeIngredients = "") {
     if (!response.ok) return [];
     const payload = await response.json();
     return (payload.results || []).map(mapSpoonacularRecipe);
+  } catch {
+    return [];
+  }
+}
+
+async function findSpoonacularByIngredients(includeIngredients = "") {
+  if (!env.spoonacularApiKey || !includeIngredients) return [];
+
+  const params = new URLSearchParams({
+    apiKey: env.spoonacularApiKey,
+    ingredients: includeIngredients,
+    number: "20",
+    ranking: "2",
+    ignorePantry: "true"
+  });
+
+  try {
+    const matches = await fetchSpoonacularJson(`https://api.spoonacular.com/recipes/findByIngredients?${params.toString()}`);
+    if (!Array.isArray(matches) || matches.length === 0) return [];
+
+    const detailedRecipes = await Promise.all(matches.map(async (match) => {
+      const detailParams = new URLSearchParams({
+        apiKey: env.spoonacularApiKey,
+        includeNutrition: "true"
+      });
+      return fetchSpoonacularJson(`https://api.spoonacular.com/recipes/${match.id}/information?${detailParams.toString()}`);
+    }));
+
+    return detailedRecipes.filter(Boolean).map(mapSpoonacularRecipe);
   } catch {
     return [];
   }
@@ -149,6 +184,16 @@ async function getInventoryMap(userId) {
   return { inventoryMap: map, inventoryItemCount: inventory.length };
 }
 
+async function getSavedSuggestionRecipes(userId) {
+  return Recipe.find({
+    $or: [
+      { userId },
+      { userId: { $exists: false } },
+      { userId: null }
+    ]
+  }).limit(50).lean();
+}
+
 function getSpoonacularIncludeIngredients(inventoryMap) {
   return [...inventoryMap.keys()]
     .slice(0, 20)
@@ -194,11 +239,30 @@ function compareRecipeWithInventory(recipe, inventoryMap, householdSize = 1) {
   };
 }
 
+function emptySuggestionGroups() {
+  return Object.fromEntries(suggestionBuckets.map((bucket) => [bucket, []]));
+}
+
+function dedupeRecipes(recipes) {
+  const seen = new Set();
+  return recipes.filter((recipe) => {
+    const key = `${recipe.source || "recipe"}:${recipe.externalId || recipe._id || recipe.title}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export async function getRecipeSuggestions(user) {
   const { inventoryMap, inventoryItemCount } = await getInventoryMap(user._id);
   const includeIngredients = getSpoonacularIncludeIngredients(inventoryMap);
-  const apiRecipes = await searchSpoonacular(undefined, includeIngredients);
-  const sourceRecipes = apiRecipes.length ? apiRecipes : demoRecipes.map((recipe) => ({ ...recipe, isDemo: true }));
+  const [savedRecipes, apiRecipes] = await Promise.all([
+    getSavedSuggestionRecipes(user._id),
+    findSpoonacularByIngredients(includeIngredients)
+  ]);
+  const shouldIncludeDemoRecipes = process.env.NODE_ENV !== "production" || (savedRecipes.length === 0 && apiRecipes.length === 0);
+  const demoSuggestionRecipes = shouldIncludeDemoRecipes ? demoRecipes.map((recipe) => ({ ...recipe, isDemo: true })) : [];
+  const sourceRecipes = dedupeRecipes([...savedRecipes, ...apiRecipes, ...demoSuggestionRecipes]);
 
   const groups = sourceRecipes
     .map((recipe) => compareRecipeWithInventory(recipe, inventoryMap, user.householdSize))
@@ -206,13 +270,21 @@ export async function getRecipeSuggestions(user) {
     .reduce((groups, recipe) => {
       groups[recipeBucket(recipe.missingCount)].push(recipe);
       return groups;
-    }, Object.fromEntries(suggestionBuckets.map((bucket) => [bucket, []])));
+    }, emptySuggestionGroups());
+
+  groups.missingMore = groups.missingMore
+    .sort((a, b) => a.missingCount - b.missingCount || a.preparationTime - b.preparationTime)
+    .slice(0, 6);
 
   debugSuggestions("summary", {
     inventoryItems: inventoryItemCount,
     uniqueIngredients: inventoryMap.size,
     recipesFetched: sourceRecipes.length,
-    source: apiRecipes.length ? "spoonacular" : "demo",
+    sources: {
+      saved: savedRecipes.length,
+      spoonacular: apiRecipes.length,
+      demo: demoSuggestionRecipes.length
+    },
     buckets: Object.fromEntries(suggestionBuckets.map((bucket) => [bucket, groups[bucket].length]))
   });
 
