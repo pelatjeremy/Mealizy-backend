@@ -1,9 +1,6 @@
 import asyncHandler from "express-async-handler";
 import { InventoryItem } from "../models/InventoryItem.js";
 import { findOrCreateIngredient } from "../services/ingredientService.js";
-import { Ingredient } from "../models/Ingredient.js";
-import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
-import { normalizeUnit } from "../utils/unitConversion.js";
 
 async function backfillNormalizedNames(items) {
   await Promise.all(items.map(async (item) => {
@@ -26,19 +23,20 @@ export const createInventoryItem = asyncHandler(async (req, res) => {
     ingredientId: ingredient._id,
     normalizedName: ingredient.normalizedName,
     quantity: req.body.quantity,
-    unit: normalizeUnit(req.body.unit),
-    expirationDate: req.body.expirationDate || undefined
+    unit: req.body.unit,
+    expirationDate: req.body.expirationDate
   });
   res.status(201).json(await item.populate("ingredientId"));
 });
 
 export const updateInventoryItem = asyncHandler(async (req, res) => {
-  const update = {
-    quantity: req.body.quantity,
-    unit: req.body.unit ? normalizeUnit(req.body.unit) : undefined,
-    expirationDate: req.body.expirationDate || undefined
-  };
-  Object.keys(update).forEach((key) => update[key] === undefined && delete update[key]);
+  const update = { ...req.body };
+  if (req.body.name) {
+    const ingredient = await findOrCreateIngredient({ name: req.body.name, category: req.body.category });
+    update.ingredientId = ingredient._id;
+    update.normalizedName = ingredient.normalizedName;
+    delete update.name;
+  }
 
   const item = await InventoryItem.findOneAndUpdate(
     { _id: req.params.id, userId: req.user._id },
@@ -50,20 +48,6 @@ export const updateInventoryItem = asyncHandler(async (req, res) => {
     error.statusCode = 404;
     throw error;
   }
-
-  if (req.body.name || req.body.category) {
-    const ingredientUpdate = {};
-    if (req.body.name) {
-      ingredientUpdate.name = req.body.name;
-      ingredientUpdate.normalizedName = normalizeIngredientName(req.body.name);
-      item.normalizedName = ingredientUpdate.normalizedName;
-      await item.save();
-    }
-    if (req.body.category) ingredientUpdate.category = req.body.category;
-    await Ingredient.findByIdAndUpdate(item.ingredientId._id, ingredientUpdate);
-    await item.populate("ingredientId");
-  }
-
   res.json(item);
 });
 

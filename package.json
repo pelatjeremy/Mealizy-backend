@@ -6,6 +6,7 @@
   "packageManager": "yarn@4.9.2",
   "scripts": {
     "dev": "nodemon src/server.js",
+    "build": "node -e \"console.log('No build step required for Mealizy API')\"",
     "start": "node src/server.js",
     "lint": "eslint src --ext .js"
   },

@@ -2,8 +2,6 @@ node_modules
 dist
 coverage
 .env
-.env.local
-.env.production
 .DS_Store
 *.log
 .yarn/*
@@ -12,3 +10,5 @@ coverage
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+.vercel

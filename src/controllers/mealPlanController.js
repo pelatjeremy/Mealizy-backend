@@ -1,44 +1,24 @@
 import asyncHandler from "express-async-handler";
-import { MealPlan } from "../models/MealPlan.js";
+import {
+  createOrReplaceMealPlan,
+  deleteMealPlan,
+  listMealPlansForWeek,
+  updateMealPlan
+} from "../services/mealPlanService.js";
 
 export const listMealPlans = asyncHandler(async (req, res) => {
-  const filter = { userId: req.user._id };
-  if (req.query.weekStartDate) filter.weekStartDate = req.query.weekStartDate;
-  const plans = await MealPlan.find(filter).sort({ day: 1, mealType: 1 });
-  res.json(plans);
+  res.json(await listMealPlansForWeek(req.user, req.query.week));
 });
 
 export const upsertMealPlan = asyncHandler(async (req, res) => {
-  const plan = await MealPlan.findOneAndUpdate(
-    {
-      userId: req.user._id,
-      weekStartDate: req.body.weekStartDate,
-      day: req.body.day,
-      mealType: req.body.mealType
-    },
-    { ...req.body, userId: req.user._id },
-    { upsert: true, new: true }
-  );
-  res.status(201).json(plan);
+  res.status(201).json(await createOrReplaceMealPlan(req.user, req.body));
 });
 
-export const updateMealPlan = asyncHandler(async (req, res) => {
-  const plan = await MealPlan.findOneAndUpdate(
-    { _id: req.params.id, userId: req.user._id },
-    req.body,
-    { new: true }
-  );
-
-  if (!plan) {
-    const error = new Error("Meal plan not found");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  res.json(plan);
+export const editMealPlan = asyncHandler(async (req, res) => {
+  res.json(await updateMealPlan(req.user, req.params.id, req.body));
 });
 
-export const deleteMealPlan = asyncHandler(async (req, res) => {
-  await MealPlan.deleteOne({ _id: req.params.id, userId: req.user._id });
+export const removeMealPlan = asyncHandler(async (req, res) => {
+  await deleteMealPlan(req.user, req.params.id);
   res.status(204).send();
 });

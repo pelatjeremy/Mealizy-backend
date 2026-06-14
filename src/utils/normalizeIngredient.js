@@ -1,41 +1,22 @@
 const irregulars = new Map([
   ["oeufs", "oeuf"],
-  ["\u0153ufs", "oeuf"],
+  ["œufs", "oeuf"],
   ["eggs", "egg"]
-]);
-
-const aliases = new Map([
-  ["egg", "oeuf"],
-  ["eggs", "oeuf"],
-  ["milk", "lait"],
-  ["milks", "lait"],
-  ["tomato", "tomate"],
-  ["tomatoes", "tomate"],
-  ["pasta", "pate"],
-  ["pastas", "pate"],
-  ["spaghetti", "pate"],
-  ["noodle", "pate"],
-  ["noodles", "pate"],
-  ["ground beef", "viande hachee"],
-  ["minced beef", "viande hachee"],
-  ["beef mince", "viande hachee"]
 ]);
 
 export function normalizeIngredient(value = "") {
   const cleaned = String(value)
-    .replace(/\u0153/g, "oe")
-    .replace(/\u0152/g, "oe")
+    .replace(/œ/g, "oe")
+    .replace(/Œ/g, "oe")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
-    .replace(/['\u2019]/g, " ")
+    .replace(/['’]/g, " ")
     .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ");
 
-  if (aliases.has(cleaned)) return aliases.get(cleaned);
-
-  const normalized = cleaned
+  return cleaned
     .split(" ")
     .map((part) => {
       if (irregulars.has(part)) return irregulars.get(part);
@@ -45,8 +26,6 @@ export function normalizeIngredient(value = "") {
       return part;
     })
     .join(" ");
-
-  return aliases.get(normalized) || normalized;
 }
 
 export const normalizeIngredientName = normalizeIngredient;

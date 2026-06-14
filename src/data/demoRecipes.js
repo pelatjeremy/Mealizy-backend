@@ -1,54 +1,23 @@
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
-import { normalizeUnit } from "../utils/unitConversion.js";
 
 const image = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=800&q=80`;
 
-const recipes = [
+export const demoRecipes = [
   {
     source: "demo",
-    externalId: "demo-pates-bolognaise",
-    title: "Pates bolognaise",
+    externalId: "demo-one-pot-pasta",
+    title: "One pot pasta",
     image: image("photo-1621996346565-e3dbc646d9a9"),
     preparationTime: 25,
     servings: 2,
-    nutrition: { calories: 640, protein: 33, carbs: 82, fat: 18 },
+    nutrition: { calories: 620, protein: 22, carbs: 78, fat: 24 },
     requiredEquipments: ["plaques"],
-    instructions: ["Cuire les pates.", "Faire revenir la viande hachee.", "Ajouter les tomates et melanger."],
+    instructions: ["Faire revenir l'ail.", "Ajouter les pâtes, tomates et eau.", "Cuire en remuant jusqu'a absorption."],
     ingredients: [
-      ["Pates", 200, "g", "epicerie"],
-      ["Tomates", 3, "unit", "fruits-legumes"],
-      ["Viande hachee", 250, "g", "viandes-poissons"]
-    ]
-  },
-  {
-    source: "demo",
-    externalId: "demo-gratin-pates",
-    title: "Gratin de pates",
-    image: image("photo-1565299624946-b28f40a0ae38"),
-    preparationTime: 35,
-    servings: 2,
-    nutrition: { calories: 710, protein: 26, carbs: 88, fat: 28 },
-    requiredEquipments: ["four"],
-    instructions: ["Cuire les pates.", "Preparer une sauce au lait.", "Ajouter le fromage et gratiner."],
-    ingredients: [
-      ["Pates", 220, "g", "epicerie"],
-      ["Lait", 300, "ml", "produits-laitiers"],
-      ["Fromage", 120, "g", "produits-laitiers"]
-    ]
-  },
-  {
-    source: "demo",
-    externalId: "demo-omelette-tomate",
-    title: "Omelette tomate",
-    image: image("photo-1525351484163-7529414344d8"),
-    preparationTime: 12,
-    servings: 2,
-    nutrition: { calories: 360, protein: 24, carbs: 10, fat: 24 },
-    requiredEquipments: ["plaques"],
-    instructions: ["Battre les oeufs.", "Ajouter les tomates.", "Cuire doucement a la poele."],
-    ingredients: [
-      ["Oeufs", 4, "unit", "produits-laitiers"],
-      ["Tomates", 2, "unit", "fruits-legumes"]
+      ["Pâtes", 200, "g", "epicerie"],
+      ["Tomates", 3, "unité", "fruits-legumes"],
+      ["Parmesan râpé", 40, "g", "produits-laitiers"],
+      ["Basilic frais", 1, "pot", "fruits-legumes"]
     ]
   },
   {
@@ -60,40 +29,87 @@ const recipes = [
     servings: 2,
     nutrition: { calories: 460, protein: 18, carbs: 52, fat: 19 },
     requiredEquipments: [],
-    instructions: ["Rincer les pois chiches.", "Couper les legumes.", "Assaisonner et melanger."],
+    instructions: ["Rincer les pois chiches.", "Couper les légumes.", "Assaisonner et mélanger."],
     ingredients: [
       ["Pois chiches", 240, "g", "epicerie"],
-      ["Concombre", 1, "unit", "fruits-legumes"],
-      ["Tomates", 2, "unit", "fruits-legumes"],
+      ["Concombre", 1, "unité", "fruits-legumes"],
+      ["Tomates", 2, "unité", "fruits-legumes"],
       ["Feta", 80, "g", "produits-laitiers"]
     ]
   },
   {
     source: "demo",
+    externalId: "demo-omelette-tomate",
+    title: "Omelette tomate",
+    image: image("photo-1525351484163-7529414344d8"),
+    preparationTime: 12,
+    servings: 2,
+    nutrition: { calories: 360, protein: 25, carbs: 10, fat: 24 },
+    requiredEquipments: ["plaques"],
+    instructions: ["Battre les oeufs.", "Ajouter les tomates coupees.", "Cuire doucement a la poele."],
+    ingredients: [
+      ["Oeufs", 4, "unité", "produits-laitiers"],
+      ["Tomates", 2, "unité", "fruits-legumes"],
+      ["Herbes", 1, "cuillère à soupe", "epicerie"]
+    ]
+  },
+  {
+    source: "demo",
+    externalId: "demo-bolognaise",
+    title: "Pâtes bolognaise",
+    image: image("photo-1622973536968-3ead9e780960"),
+    preparationTime: 35,
+    servings: 4,
+    nutrition: { calories: 720, protein: 34, carbs: 86, fat: 22 },
+    requiredEquipments: ["plaques"],
+    instructions: ["Cuire les pâtes.", "Faire mijoter la sauce tomate avec la viande.", "Mélanger et servir chaud."],
+    ingredients: [
+      ["Pâtes", 400, "g", "epicerie"],
+      ["Tomates", 4, "unité", "fruits-legumes"],
+      ["Viande hachée", 300, "g", "viandes-poissons"],
+      ["Parmesan râpé", 60, "g", "produits-laitiers"]
+    ]
+  },
+  {
+    source: "demo",
     externalId: "demo-curry-legumes",
-    title: "Curry de legumes",
+    title: "Curry de légumes",
     image: image("photo-1565557623262-b51c2513a641"),
     preparationTime: 30,
     servings: 3,
     nutrition: { calories: 540, protein: 14, carbs: 62, fat: 25 },
     requiredEquipments: ["plaques"],
-    instructions: ["Faire revenir les legumes.", "Ajouter lait de coco et curry.", "Servir avec du riz."],
+    instructions: ["Faire revenir les légumes.", "Ajouter lait de coco et curry.", "Servir avec du riz."],
     ingredients: [
       ["Riz basmati", 250, "g", "epicerie"],
-      ["Courgette", 1, "unit", "fruits-legumes"],
+      ["Courgette", 1, "unité", "fruits-legumes"],
       ["Lait de coco", 400, "ml", "epicerie"],
-      ["Curry", 1, "tbsp", "epicerie"]
+      ["Curry", 1, "cuillère à soupe", "epicerie"]
+    ]
+  },
+  {
+    source: "demo",
+    externalId: "demo-gratin-courgettes",
+    title: "Gratin de courgettes",
+    image: image("photo-1565299624946-b28f40a0ae38"),
+    preparationTime: 40,
+    servings: 4,
+    nutrition: { calories: 430, protein: 19, carbs: 28, fat: 27 },
+    requiredEquipments: ["four"],
+    instructions: ["Trancher les courgettes.", "Monter le gratin.", "Cuire au four jusqu'a coloration."],
+    ingredients: [
+      ["Courgette", 3, "unité", "fruits-legumes"],
+      ["Mozzarella", 200, "g", "produits-laitiers"],
+      ["Crème", 200, "ml", "produits-laitiers"]
     ]
   }
-];
-
-export const demoRecipes = recipes.map((recipe) => ({
+].map((recipe) => ({
   ...recipe,
   ingredients: recipe.ingredients.map(([ingredientName, quantity, unit, category]) => ({
     ingredientName,
     normalizedName: normalizeIngredientName(ingredientName),
     quantity,
-    unit: normalizeUnit(unit),
+    unit,
     category
   }))
 }));

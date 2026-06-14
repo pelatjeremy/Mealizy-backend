@@ -3,11 +3,7 @@ import { Recipe } from "../models/Recipe.js";
 import { listRecipes, getRecipeSuggestions } from "../services/recipeService.js";
 
 export const searchRecipes = asyncHandler(async (req, res) => {
-  const recipes = await listRecipes({ q: req.query.q });
-  res.json({
-    isDemo: !process.env.SPOONACULAR_API_KEY,
-    recipes
-  });
+  res.json(await listRecipes({ q: req.query.q }));
 });
 
 export const suggestions = asyncHandler(async (req, res) => {
