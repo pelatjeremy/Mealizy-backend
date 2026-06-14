@@ -47,11 +47,21 @@ export type InventoryItem = {
 
 export type ShoppingItem = {
   id: string;
+  _id?: string;
   ingredientName: string;
   quantity: number;
   unit: string;
   category: string;
   checked: boolean;
+};
+
+export type ShoppingList = {
+  _id?: string;
+  userId?: string;
+  weekStartDate: string;
+  items: ShoppingItem[];
+  generatedAt?: string;
+  isCompleted?: boolean;
 };
 
 export type UserProfile = {

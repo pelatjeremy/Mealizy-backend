@@ -1,9 +1,13 @@
 import { inventory, recipes, shoppingList } from "./demo-data";
-import type { MealPlan, MealPlanDay, MealType, RecipeSuggestionGroups, UserProfile } from "@/types/domain";
+import type { MealPlan, MealPlanDay, MealType, RecipeSuggestionGroups, ShoppingList, UserProfile } from "@/types/domain";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is required");
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -94,6 +98,49 @@ export async function deleteMealPlan(token: string, id: string) {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` }
   });
+}
+
+function normalizeShoppingList(list: ShoppingList): ShoppingList {
+  return {
+    ...list,
+    items: (list.items || []).map((item) => ({
+      ...item,
+      id: item.id || item._id || ""
+    }))
+  };
+}
+
+export async function getShoppingList(token: string, week: string) {
+  const list = await request<ShoppingList>(`/shopping-list?week=${encodeURIComponent(week)}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function generateShoppingList(token: string, week: string) {
+  const list = await request<ShoppingList>("/shopping-list/generate", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ week })
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function updateShoppingListItemChecked(token: string, id: string, checked: boolean) {
+  const list = await request<ShoppingList>(`/shopping-list/items/${id}/check`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ checked })
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function addShoppingListItemToInventory(token: string, id: string) {
+  const list = await request<ShoppingList>(`/shopping-list/items/${id}/add-to-inventory`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return normalizeShoppingList(list);
 }
 
 export async function getDashboardData() {

@@ -6,6 +6,7 @@ coverage
 .env.local
 .DS_Store
 *.log
+*.tsbuildinfo
 web-dev*.log
 .yarn/*
 !.yarn/patches
@@ -14,3 +15,5 @@ web-dev*.log
 !.yarn/sdks
 !.yarn/versions
 publish/
+.backend-main-verify/
+.publish-*/
