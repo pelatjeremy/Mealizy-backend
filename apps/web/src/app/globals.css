@@ -108,8 +108,14 @@ select {
 }
 
 .nav-item:hover,
-.nav-item:first-child {
+.nav-item.active {
   background: var(--green-soft);
+}
+
+.nav-button {
+  cursor: pointer;
+  border: 0;
+  text-align: left;
 }
 
 .user-card {
@@ -120,10 +126,23 @@ select {
   background: var(--surface);
 }
 
+.user-avatar,
 .user-card img {
   width: 42px;
   height: 42px;
   border-radius: 50%;
+}
+
+.user-avatar {
+  display: grid;
+  flex: 0 0 42px;
+  place-items: center;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 900;
+}
+
+.user-card img {
   object-fit: cover;
 }
 

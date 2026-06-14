@@ -34,11 +34,15 @@ export async function getRecipeSuggestions(token: string) {
 
 export function readAuthToken() {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem("mealizy_token") || localStorage.getItem("mealizyToken") || localStorage.getItem("token") || "";
+  return localStorage.getItem("mealizy_token") || "";
 }
 
 export function storeAuthToken(token: string) {
   localStorage.setItem("mealizy_token", token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem("mealizy_token");
 }
 
 export async function login(payload: { email: string; password: string }) {

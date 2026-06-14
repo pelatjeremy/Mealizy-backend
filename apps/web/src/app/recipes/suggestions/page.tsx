@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
-import { getRecipeSuggestions } from "@/lib/api";
+import { getRecipeSuggestions, readAuthToken } from "@/lib/api";
 import type { Recipe, RecipeSuggestionGroups } from "@/types/domain";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 
@@ -21,11 +21,6 @@ const categories = [
   { key: "missing3", title: "Il manque 3 ingrédients", tone: "danger" },
   { key: "missingMore", title: "Plus de 3 ingrédients manquants", tone: "danger" }
 ] as const;
-
-function readToken() {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem("mealizy_token") || localStorage.getItem("mealizyToken") || localStorage.getItem("token") || "";
-}
 
 function RecipeCard({ recipe }: { recipe: Recipe }) {
   const missingIngredients = recipe.missingIngredients || [];
@@ -58,7 +53,7 @@ export default function RecipeSuggestionsPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
 
   useEffect(() => {
-    const token = readToken();
+    const token = readAuthToken();
     if (!token) {
       setStatus("missing-token");
       return;

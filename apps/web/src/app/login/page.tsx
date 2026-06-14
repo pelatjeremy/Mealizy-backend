@@ -17,7 +17,7 @@ export default function LoginPage() {
     try {
       const auth = await login({ email, password });
       storeAuthToken(auth.token);
-      router.push("/meal-plans");
+      router.push("/dashboard");
     } catch {
       setStatus("error");
     }

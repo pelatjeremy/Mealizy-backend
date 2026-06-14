@@ -19,7 +19,7 @@ export default function RegisterPage() {
     try {
       const auth = await register({ firstname, lastname, email, password });
       storeAuthToken(auth.token);
-      router.push("/meal-plans");
+      router.push("/dashboard");
     } catch {
       setStatus("error");
     }
