@@ -4,7 +4,6 @@ import { ShoppingList } from "../models/ShoppingList.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
 import { findOrCreateIngredient } from "./ingredientService.js";
-import { normalizeWeekStartDate } from "./mealPlanService.js";
 import { getRecipeById } from "./recipeService.js";
 
 const unitFamilies = {
@@ -23,6 +22,15 @@ function badRequest(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+}
+
+function normalizeWeekStartDate(value) {
+  if (!value) throw badRequest("week is required");
+
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) throw badRequest("week must be a valid YYYY-MM-DD date");
+
+  return date;
 }
 
 function findUnitFamily(unit) {
