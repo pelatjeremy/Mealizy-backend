@@ -17,9 +17,12 @@ const shoppingListSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     weekStartDate: { type: Date, required: true, index: true },
     items: { type: [shoppingListItemSchema], default: [] },
+    generatedAt: { type: Date },
     isCompleted: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
+
+shoppingListSchema.index({ userId: 1, weekStartDate: 1 }, { unique: true });
 
 export const ShoppingList = mongoose.model("ShoppingList", shoppingListSchema);
