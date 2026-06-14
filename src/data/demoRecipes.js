@@ -38,6 +38,23 @@ const recipes = [
   },
   {
     source: "demo",
+    externalId: "demo-bolognaise",
+    title: "Pates bolognaise",
+    image: image("photo-1622973536968-3ead9e780960"),
+    preparationTime: 35,
+    servings: 4,
+    nutrition: { calories: 720, protein: 34, carbs: 86, fat: 22 },
+    requiredEquipments: ["plaques"],
+    instructions: ["Cuire les pates.", "Faire mijoter la sauce tomate avec la viande.", "Melanger et servir chaud."],
+    ingredients: [
+      ["Pates", 400, "g", "epicerie"],
+      ["Tomates", 4, "unit", "fruits-legumes"],
+      ["Viande hachee", 300, "g", "viandes-poissons"],
+      ["Parmesan rape", 60, "g", "produits-laitiers"]
+    ]
+  },
+  {
+    source: "demo",
     externalId: "demo-omelette-tomate",
     title: "Omelette tomate",
     image: image("photo-1525351484163-7529414344d8"),
