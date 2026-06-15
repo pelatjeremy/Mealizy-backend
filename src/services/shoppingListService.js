@@ -90,6 +90,16 @@ function previousCheckedMap(existingList) {
   );
 }
 
+function cloneRecipeIngredients(recipe) {
+  return (recipe.ingredients || []).map((ingredient) => ({
+    ingredientName: ingredient.ingredientName || ingredient.name,
+    normalizedName: ingredient.normalizedName,
+    quantity: Number(ingredient.quantity || 0),
+    unit: ingredient.unit || "unit",
+    category: ingredient.category || "autres"
+  }));
+}
+
 async function getPlannedNeeds(user, weekStartDate) {
   const plans = await MealPlan.find({ userId: user._id, weekStartDate }).lean();
   const needs = new Map();
@@ -102,12 +112,12 @@ async function getPlannedNeeds(user, weekStartDate) {
     const plannedServings = Math.max(Number(plan.servings || recipeServings), 1);
     const scale = plannedServings / recipeServings;
 
-    for (const ingredient of recipe.ingredients || []) {
-      const ingredientName = ingredient.ingredientName || ingredient.name;
+    for (const ingredient of cloneRecipeIngredients(recipe)) {
+      const ingredientName = ingredient.ingredientName;
       if (!ingredientName) continue;
 
-      const normalizedName = normalizeIngredientName(ingredientName);
-      const unit = ingredient.unit || "unit";
+      const normalizedName = ingredient.normalizedName || normalizeIngredientName(ingredientName);
+      const unit = ingredient.unit;
       const key = buildNeedKey(normalizedName, unit);
       const existing = needs.get(key);
 

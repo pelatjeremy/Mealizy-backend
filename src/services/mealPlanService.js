@@ -52,20 +52,27 @@ function resolveServings(requestedServings, user, recipe) {
   return Number.isFinite(recipeServings) && recipeServings >= 1 ? Math.round(recipeServings) : 1;
 }
 
+function serializeRecipeForPlanning(recipe) {
+  return {
+    id: recipe.externalId || String(recipe._id),
+    source: recipe.source,
+    title: recipe.title || recipe.name,
+    image: recipe.image,
+    preparationTime: recipe.preparationTime || 0,
+    calories: recipe.nutrition?.calories || 0,
+    servings: recipe.servings || 1,
+    ingredients: (recipe.ingredients || []).map((ingredient) => ({ ...ingredient })),
+    instructions: [...(recipe.instructions || [])],
+    nutrition: { ...(recipe.nutrition || {}) }
+  };
+}
+
 function serializeMealPlan(plan, recipe) {
   const obj = plan.toObject ? plan.toObject() : plan;
   return recipe
     ? {
         ...obj,
-        recipe: {
-          id: recipe.externalId || String(recipe._id),
-          source: recipe.source,
-          title: recipe.title || recipe.name,
-          image: recipe.image,
-          preparationTime: recipe.preparationTime || 0,
-          calories: recipe.nutrition?.calories || 0,
-          servings: recipe.servings || 1
-        }
+        recipe: serializeRecipeForPlanning(recipe)
       }
     : obj;
 }
