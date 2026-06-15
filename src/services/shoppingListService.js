@@ -127,14 +127,6 @@ async function removeItemFromInventory(userId, item) {
   await inventoryItem.save();
 }
 
-function previousCheckedMap(existingList) {
-  return new Map(
-    (existingList?.items || [])
-      .filter((item) => item.checked)
-      .map((item) => [buildNeedKey(item.normalizedName, item.unit), true])
-  );
-}
-
 function cloneRecipeIngredients(recipe) {
   return (recipe.ingredients || []).map((ingredient) => ({
     ingredientName: ingredient.ingredientName || ingredient.name,
@@ -215,15 +207,13 @@ export async function getShoppingListForWeek(user, week) {
 
 export async function generateShoppingList(user, week) {
   const weekStartDate = normalizeWeekStartDate(week);
-  const existingList = await ShoppingList.findOne({ userId: user._id, weekStartDate });
-  const checkedMap = previousCheckedMap(existingList);
   const needs = await getPlannedNeeds(user, weekStartDate);
 
   await subtractInventory(user._id, needs);
 
   const items = [...needs.values()]
     .filter((need) => roundQuantity(need.quantity) > 0)
-    .map((need) => serializeNeed(need, checkedMap.get(buildNeedKey(need.normalizedName, need.unit)) || false))
+    .map((need) => serializeNeed(need, false))
     .sort((a, b) => a.category.localeCompare(b.category) || a.ingredientName.localeCompare(b.ingredientName));
 
   return ShoppingList.findOneAndUpdate(
