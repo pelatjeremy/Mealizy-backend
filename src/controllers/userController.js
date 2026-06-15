@@ -16,6 +16,6 @@ export const updateProfile = asyncHandler(async (req, res) => {
     "allergies"
   ];
   const update = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
-  const user = await User.findByIdAndUpdate(req.user._id, update, { new: true }).select("-password");
+  const user = await User.findByIdAndUpdate(req.user._id, update, { new: true, runValidators: true }).select("-password");
   res.json(user);
 });

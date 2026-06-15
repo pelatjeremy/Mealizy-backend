@@ -7,11 +7,16 @@ import { addQuantities, normalizeUnit, subtractQuantities } from "../utils/unitC
 
 const suggestionBuckets = ["complete", "missing1", "missing2", "missing3", "missingMore"];
 
-export async function listRecipes({ q }) {
-  const query = q ? { title: { $regex: q, $options: "i" } } : {};
-  const savedRecipes = await Recipe.find(query).limit(30).lean();
+export async function listRecipes({ q, userId } = {}) {
+  const titleFilter = q ? { title: { $regex: q, $options: "i" } } : {};
+  const userFilter = userId ? { userId } : { source: { $ne: "user" } };
+  const savedRecipes = await Recipe.find({ ...titleFilter, ...userFilter }).limit(30).lean();
   const demo = demoRecipes.filter((recipe) => !q || recipe.title.toLowerCase().includes(q.toLowerCase()));
   return [...savedRecipes, ...demo];
+}
+
+export async function listUserRecipes(user) {
+  return Recipe.find({ userId: user._id, source: "user" }).sort({ updatedAt: -1 }).lean();
 }
 
 async function fetchSpoonacularRecipeById(recipeId) {
@@ -124,7 +129,7 @@ function recipeBucket(missingCount) {
 
 function compareRecipeWithInventory(recipe, inventoryMap, householdSize = 1) {
   const scale = Math.max(Number(householdSize || 1), 1) / Math.max(Number(recipe.servings || 1), 1);
-  const missingIngredients = recipe.ingredients
+  const comparedIngredients = (recipe.ingredients || [])
     .map((ingredient) => {
       const normalizedName = ingredient.normalizedName || normalizeIngredientName(ingredient.ingredientName);
       const requiredQuantity = Math.round(Number(ingredient.quantity || 0) * scale * 100) / 100;
@@ -141,18 +146,24 @@ function compareRecipeWithInventory(recipe, inventoryMap, householdSize = 1) {
       return {
         ingredientName: ingredient.ingredientName,
         normalizedName,
+        requiredQuantity,
+        availableQuantity,
+        isAvailable: missingQuantity <= 0,
         quantity: missingQuantity,
         unit: normalizeUnit(ingredient.unit),
         category: ingredient.category || "autres"
       };
-    })
-    .filter((ingredient) => ingredient.quantity > 0);
+    });
+
+  const missingIngredients = comparedIngredients.filter((ingredient) => ingredient.quantity > 0);
+  const availableIngredients = comparedIngredients.filter((ingredient) => ingredient.isAvailable);
 
   return {
     ...recipe,
     name: recipe.name || recipe.title,
     missingCount: missingIngredients.length,
-    missingIngredients
+    missingIngredients,
+    availableIngredients
   };
 }
 

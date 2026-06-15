@@ -34,7 +34,7 @@ const recipeSchema = new mongoose.Schema(
     externalId: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     title: { type: String, required: true },
-    image: { type: String, required: true },
+    image: { type: String, default: "" },
     ingredients: { type: [recipeIngredientSchema], default: [] },
     instructions: { type: [String], default: [] },
     preparationTime: { type: Number, default: 20 },
