@@ -82,6 +82,28 @@ function toInventoryUnit(unit) {
   return normalizeUnit(unit);
 }
 
+async function addItemToInventory(userId, item) {
+  if (!item?.ingredientName) throw badRequest("ingredientName is required");
+  if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) throw badRequest("quantity must be greater than 0");
+
+  const unit = toInventoryUnit(item.unit);
+  const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
+
+  await InventoryItem.findOneAndUpdate(
+    { userId, ingredientId: ingredient._id, unit },
+    {
+      $inc: { quantity: Number(item.quantity) },
+      $set: { normalizedName: ingredient.normalizedName },
+      $setOnInsert: {
+        userId,
+        ingredientId: ingredient._id,
+        unit
+      }
+    },
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+  );
+}
+
 function previousCheckedMap(existingList) {
   return new Map(
     (existingList?.items || [])
@@ -201,6 +223,11 @@ export async function setShoppingListItemChecked(userId, itemId, checked) {
   if (!list) throw notFound("Shopping list item not found");
 
   const item = list.items.id(itemId);
+
+  if (checked && !item.checked) {
+    await addItemToInventory(userId, item);
+  }
+
   item.checked = checked;
   list.isCompleted = list.items.length > 0 && list.items.every((entry) => entry.checked);
   await list.save();
@@ -212,16 +239,9 @@ export async function addShoppingListItemToInventory(userId, itemId) {
   if (!list) throw notFound("Shopping list item not found");
 
   const item = list.items.id(itemId);
-  const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
-
-  await InventoryItem.findOneAndUpdate(
-    { userId, ingredientId: ingredient._id, unit: toInventoryUnit(item.unit) },
-    {
-      $inc: { quantity: item.quantity },
-      $set: { normalizedName: ingredient.normalizedName }
-    },
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
-  );
+  if (!item.checked) {
+    await addItemToInventory(userId, item);
+  }
 
   item.checked = true;
   list.isCompleted = list.items.length > 0 && list.items.every((entry) => entry.checked);
