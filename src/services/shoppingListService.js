@@ -1,4 +1,5 @@
 import { InventoryItem } from "../models/InventoryItem.js";
+import { Ingredient } from "../models/Ingredient.js";
 import { MealPlan } from "../models/MealPlan.js";
 import { ShoppingList } from "../models/ShoppingList.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
@@ -102,6 +103,28 @@ async function addItemToInventory(userId, item) {
     },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
+}
+
+async function removeItemFromInventory(userId, item) {
+  if (!item?.ingredientName) throw badRequest("ingredientName is required");
+  if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) throw badRequest("quantity must be greater than 0");
+
+  const unit = toInventoryUnit(item.unit);
+  const normalizedName = item.normalizedName || normalizeIngredientName(item.ingredientName);
+  const ingredient = await Ingredient.findOne({ normalizedName });
+  if (!ingredient) return;
+
+  const inventoryItem = await InventoryItem.findOne({ userId, ingredientId: ingredient._id, unit });
+  if (!inventoryItem) return;
+
+  const nextQuantity = roundQuantity(Number(inventoryItem.quantity || 0) - Number(item.quantity || 0));
+  if (nextQuantity <= 0) {
+    await InventoryItem.deleteOne({ _id: inventoryItem._id, userId });
+    return;
+  }
+
+  inventoryItem.quantity = nextQuantity;
+  await inventoryItem.save();
 }
 
 function previousCheckedMap(existingList) {
@@ -226,6 +249,9 @@ export async function setShoppingListItemChecked(userId, itemId, checked) {
 
   if (checked && !item.checked) {
     await addItemToInventory(userId, item);
+  }
+  if (!checked && item.checked) {
+    await removeItemFromInventory(userId, item);
   }
 
   item.checked = checked;
