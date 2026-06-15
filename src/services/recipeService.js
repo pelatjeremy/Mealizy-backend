@@ -8,11 +8,20 @@ import { addQuantities, normalizeUnit, subtractQuantities } from "../utils/unitC
 const suggestionBuckets = ["complete", "missing1", "missing2", "missing3", "missingMore"];
 
 export async function listRecipes({ q, userId } = {}) {
-  const titleFilter = q ? { title: { $regex: q, $options: "i" } } : {};
-  const userFilter = userId ? { userId } : { source: { $ne: "user" } };
-  const savedRecipes = await Recipe.find({ ...titleFilter, ...userFilter }).limit(30).lean();
-  const demo = demoRecipes.filter((recipe) => !q || recipe.title.toLowerCase().includes(q.toLowerCase()));
-  return [...savedRecipes, ...demo];
+  const normalizedQuery = q ? normalizeIngredientName(q) : "";
+  const userFilter = userId ? { $or: [{ userId }, { source: { $ne: "user" } }] } : { source: { $ne: "user" } };
+  const savedRecipes = await Recipe.find(userFilter).sort({ updatedAt: -1 }).limit(normalizedQuery ? 100 : 30).lean();
+  const matchesQuery = (recipe) => {
+    if (!normalizedQuery) return true;
+    const searchableText = [
+      recipe.title,
+      recipe.name,
+      ...(recipe.ingredients || []).map((ingredient) => ingredient.ingredientName)
+    ].filter(Boolean).join(" ");
+    return normalizeIngredientName(searchableText).includes(normalizedQuery);
+  };
+  const demo = demoRecipes.filter(matchesQuery);
+  return [...savedRecipes.filter(matchesQuery).slice(0, 30), ...demo];
 }
 
 export async function listUserRecipes(user) {
