@@ -2,7 +2,7 @@ import asyncHandler from "express-async-handler";
 import mongoose from "mongoose";
 import { MealPlan } from "../models/MealPlan.js";
 import { Recipe } from "../models/Recipe.js";
-import { listRecipes, getRecipeSuggestions, listUserRecipes } from "../services/recipeService.js";
+import { listRecipes, getRecipeById, getRecipeSuggestions, listUserRecipes } from "../services/recipeService.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
 
@@ -16,6 +16,16 @@ export const myRecipes = asyncHandler(async (req, res) => {
 
 export const suggestions = asyncHandler(async (req, res) => {
   res.json(await getRecipeSuggestions(req.user));
+});
+
+export const recipeDetail = asyncHandler(async (req, res) => {
+  const recipe = await getRecipeById(req.params.id, req.query.source);
+  if (!recipe) {
+    res.status(404).json({ message: "Recipe not found" });
+    return;
+  }
+
+  res.json(recipe);
 });
 
 function notFound(message) {
