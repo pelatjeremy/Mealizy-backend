@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Apple, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, Moon, Pencil, Sun, Trash2 } from "lucide-react";
+import { Apple, BookOpen, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, Sun, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { deleteMealPlan, getMealPlans, getProfile, readAuthToken, updateMealPlan } from "@/lib/api";
 import type { MealPlan, MealPlanDay, MealType, UserProfile } from "@/types/domain";
 
@@ -49,14 +50,24 @@ function planKey(day: MealPlanDay, mealType: MealType) {
 
 function MealSlot({
   plan,
+  openMenuId,
+  onToggleMenu,
+  onCook,
   onDelete,
+  onViewRecipe,
   onUpdateServings
 }: {
   plan?: MealPlan;
+  openMenuId: string | null;
+  onToggleMenu: (plan: MealPlan) => void;
+  onCook: (plan: MealPlan) => void;
   onDelete: (plan: MealPlan) => void;
+  onViewRecipe: (plan: MealPlan) => void;
   onUpdateServings: (plan: MealPlan) => void;
 }) {
   if (!plan) return <article className="meal-slot meal-slot-empty">Disponible</article>;
+
+  const isMenuOpen = openMenuId === plan._id;
 
   return (
     <article className="meal-slot planned-slot">
@@ -66,21 +77,28 @@ function MealSlot({
       <span>{plan.recipe?.calories || 0} kcal</span>
       <span>{plan.servings} portions</span>
       <div className="meal-actions">
-        <button type="button" aria-label="Modifier les portions" onClick={() => onUpdateServings(plan)}>
-          <Pencil size={15} />
+        <button type="button" aria-label="Actions du repas" aria-expanded={isMenuOpen} onClick={() => onToggleMenu(plan)}>
+          <MoreHorizontal size={16} />
         </button>
-        <button type="button" aria-label="Supprimer le repas" onClick={() => onDelete(plan)}>
-          <Trash2 size={15} />
-        </button>
+        {isMenuOpen && (
+          <div className="meal-actions-menu">
+            <button type="button" onClick={() => onCook(plan)}><ChefHat size={15} /> Cuisiner</button>
+            <button type="button" onClick={() => onViewRecipe(plan)}><BookOpen size={15} /> Voir la recette</button>
+            <button type="button" onClick={() => onUpdateServings(plan)}><Pencil size={15} /> Modifier les portions</button>
+            <button type="button" onClick={() => onDelete(plan)}><Trash2 size={15} /> Supprimer du planning</button>
+          </div>
+        )}
       </div>
     </article>
   );
 }
 
 export function MealPlanner() {
+  const router = useRouter();
   const [token, setToken] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [plans, setPlans] = useState<MealPlan[]>([]);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => getMonday());
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
   const week = formatDateInput(weekStart);
@@ -127,6 +145,7 @@ export function MealPlanner() {
     try {
       await deleteMealPlan(token, plan._id);
       setPlans((items) => items.filter((item) => item._id !== plan._id));
+      setOpenMenuId(null);
     } catch {
       setStatus("error");
     }
@@ -140,9 +159,26 @@ export function MealPlanner() {
     try {
       const updated = await updateMealPlan(token, plan._id, { servings: Number(value) });
       setPlans((items) => items.map((item) => (item._id === updated._id ? updated : item)));
+      setOpenMenuId(null);
     } catch {
       setStatus("error");
     }
+  }
+
+  function handleToggleMenu(plan: MealPlan) {
+    setOpenMenuId((current) => (current === plan._id ? null : plan._id));
+  }
+
+  function handleViewRecipe(plan: MealPlan) {
+    const recipeId = plan.recipe?.id || plan.recipeId;
+    if (!recipeId) return;
+    setOpenMenuId(null);
+    router.push(`/recipes/${encodeURIComponent(recipeId)}?source=${encodeURIComponent(plan.recipeSource)}`);
+  }
+
+  function handleCook(plan: MealPlan) {
+    setOpenMenuId(null);
+    handleViewRecipe(plan);
   }
 
   return (
@@ -183,7 +219,11 @@ export function MealPlanner() {
                   <MealSlot
                     key={planKey(day, meal.key)}
                     plan={planMap[planKey(day, meal.key)]}
+                    openMenuId={openMenuId}
+                    onToggleMenu={handleToggleMenu}
+                    onCook={handleCook}
                     onDelete={handleDelete}
+                    onViewRecipe={handleViewRecipe}
                     onUpdateServings={handleUpdateServings}
                   />
                 ))}

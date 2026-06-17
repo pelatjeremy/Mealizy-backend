@@ -12,9 +12,9 @@ export type Recipe = {
   _id?: string;
   id?: string;
   source?: "api" | "user" | "demo";
-  externalId: string;
+  externalId?: string;
   title: string;
-  image: string;
+  image?: string;
   preparationTime: number;
   servings: number;
   missingCount?: number;
@@ -26,6 +26,8 @@ export type Recipe = {
     fat: number;
   };
   ingredients: RecipeIngredient[];
+  instructions?: string[];
+  requiredEquipments?: string[];
 };
 
 export type RecipeSuggestionGroups = {
@@ -86,7 +88,7 @@ export type MealPlanRecipe = {
   id: string;
   source: "api" | "user" | "demo";
   title: string;
-  image: string;
+  image?: string;
   preparationTime: number;
   calories: number;
   servings: number;

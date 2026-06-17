@@ -1,7 +1,11 @@
 import { inventory, recipes, shoppingList } from "./demo-data";
-import type { MealPlan, MealPlanDay, MealType, RecipeSuggestionGroups, ShoppingList, UserProfile } from "@/types/domain";
+import type { MealPlan, MealPlanDay, MealType, Recipe, RecipeSuggestionGroups, ShoppingList, UserProfile } from "@/types/domain";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+export function getApiErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_URL) {
@@ -29,6 +33,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getRecipeSuggestions(token: string) {
   return request<RecipeSuggestionGroups>("/recipes/suggestions", {
     headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function getRecipe(id: string, source?: Recipe["source"], token?: string) {
+  const params = source ? `?source=${encodeURIComponent(source)}` : "";
+  return request<Recipe>(`/recipes/${encodeURIComponent(id)}${params}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined
   });
 }
 

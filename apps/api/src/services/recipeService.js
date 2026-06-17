@@ -72,6 +72,8 @@ function mapSpoonacularRecipe(recipe) {
   }));
 
   const nutrients = recipe.nutrition?.nutrients || [];
+  const analyzedInstructions = recipe.analyzedInstructions?.flatMap((block) => block.steps || []) || [];
+  const instructions = analyzedInstructions.map((step) => step.step).filter(Boolean);
 
   return {
     source: "api",
@@ -82,6 +84,7 @@ function mapSpoonacularRecipe(recipe) {
     ingredients,
     preparationTime: recipe.readyInMinutes || 20,
     servings: recipe.servings || 1,
+    instructions,
     nutrition: {
       calories: readNutrient(nutrients, ["calories"]),
       protein: readNutrient(nutrients, ["protein"]),
