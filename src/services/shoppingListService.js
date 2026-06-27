@@ -1,5 +1,4 @@
 import { InventoryItem } from "../models/InventoryItem.js";
-import { Ingredient } from "../models/Ingredient.js";
 import { MealPlan } from "../models/MealPlan.js";
 import { ShoppingList } from "../models/ShoppingList.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
@@ -23,6 +22,12 @@ function notFound(message) {
 function badRequest(message) {
   const error = new Error(message);
   error.statusCode = 400;
+  return error;
+}
+
+function unprocessable(message) {
+  const error = new Error(message);
+  error.statusCode = 422;
   return error;
 }
 
@@ -83,78 +88,66 @@ function toInventoryUnit(unit) {
   return normalizeUnit(unit);
 }
 
-async function addItemToInventory(userId, item) {
-  if (!item?.ingredientName) throw badRequest("ingredientName is required");
-  if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) throw badRequest("quantity must be greater than 0");
-
-  const unit = toInventoryUnit(item.unit);
+async function mergeItemIntoInventory(userId, item) {
   const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
 
   await InventoryItem.findOneAndUpdate(
-    { userId, ingredientId: ingredient._id, unit },
+    { userId, ingredientId: ingredient._id, unit: toInventoryUnit(item.unit) },
     {
-      $inc: { quantity: Number(item.quantity) },
-      $set: { normalizedName: ingredient.normalizedName },
-      $setOnInsert: {
-        userId,
-        ingredientId: ingredient._id,
-        unit
-      }
+      $inc: { quantity: item.quantity },
+      $set: { normalizedName: ingredient.normalizedName }
     },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
 }
 
 async function removeItemFromInventory(userId, item) {
-  if (!item?.ingredientName) throw badRequest("ingredientName is required");
-  if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) throw badRequest("quantity must be greater than 0");
+  const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
+  const inventoryItem = await InventoryItem.findOne({
+    userId,
+    ingredientId: ingredient._id,
+    unit: toInventoryUnit(item.unit)
+  });
 
-  const unit = toInventoryUnit(item.unit);
-  const normalizedName = item.normalizedName || normalizeIngredientName(item.ingredientName);
-  const ingredient = await Ingredient.findOne({ normalizedName });
-  if (!ingredient) return;
-
-  const inventoryItem = await InventoryItem.findOne({ userId, ingredientId: ingredient._id, unit });
   if (!inventoryItem) return;
 
-  const nextQuantity = roundQuantity(Number(inventoryItem.quantity || 0) - Number(item.quantity || 0));
-  if (nextQuantity <= 0) {
-    await InventoryItem.deleteOne({ _id: inventoryItem._id, userId });
+  inventoryItem.quantity = roundQuantity(Number(inventoryItem.quantity || 0) - Number(item.quantity || 0));
+  if (inventoryItem.quantity <= 0) {
+    await inventoryItem.deleteOne();
     return;
   }
 
-  inventoryItem.quantity = nextQuantity;
   await inventoryItem.save();
 }
 
-function cloneRecipeIngredients(recipe) {
-  return (recipe.ingredients || []).map((ingredient) => ({
-    ingredientName: ingredient.ingredientName || ingredient.name,
-    normalizedName: ingredient.normalizedName,
-    quantity: Number(ingredient.quantity || 0),
-    unit: ingredient.unit || "unit",
-    category: ingredient.category || "autres"
-  }));
+function previousCheckedMap(existingList) {
+  return new Map(
+    (existingList?.items || [])
+      .filter((item) => item.checked)
+      .map((item) => [buildNeedKey(item.normalizedName, item.unit), true])
+  );
 }
 
 async function getPlannedNeeds(user, weekStartDate) {
   const plans = await MealPlan.find({ userId: user._id, weekStartDate }).lean();
   const needs = new Map();
+  let resolvedRecipeCount = 0;
 
   for (const plan of plans) {
-    const recipe = await getRecipeById(plan.recipeId, plan.recipeSource);
+    const recipe = plan.recipeSnapshot || await getRecipeById(plan.recipeId, plan.recipeSource);
     if (!recipe) continue;
+    resolvedRecipeCount += 1;
 
     const recipeServings = Math.max(Number(recipe.servings || 1), 1);
     const plannedServings = Math.max(Number(plan.servings || recipeServings), 1);
     const scale = plannedServings / recipeServings;
 
-    for (const ingredient of cloneRecipeIngredients(recipe)) {
-      const ingredientName = ingredient.ingredientName;
+    for (const ingredient of recipe.ingredients || []) {
+      const ingredientName = ingredient.ingredientName || ingredient.name;
       if (!ingredientName) continue;
 
-      const normalizedName = ingredient.normalizedName || normalizeIngredientName(ingredientName);
-      const unit = ingredient.unit;
+      const normalizedName = normalizeIngredientName(ingredientName);
+      const unit = ingredient.unit || "unit";
       const key = buildNeedKey(normalizedName, unit);
       const existing = needs.get(key);
 
@@ -173,7 +166,7 @@ async function getPlannedNeeds(user, weekStartDate) {
     }
   }
 
-  return needs;
+  return { needs, planCount: plans.length, resolvedRecipeCount };
 }
 
 async function subtractInventory(userId, needs) {
@@ -207,13 +200,20 @@ export async function getShoppingListForWeek(user, week) {
 
 export async function generateShoppingList(user, week) {
   const weekStartDate = normalizeWeekStartDate(week);
-  const needs = await getPlannedNeeds(user, weekStartDate);
+  const existingList = await ShoppingList.findOne({ userId: user._id, weekStartDate });
+  const checkedMap = previousCheckedMap(existingList);
+  const { needs, planCount, resolvedRecipeCount } = await getPlannedNeeds(user, weekStartDate);
+
+  if (!planCount) throw badRequest("Aucun repas planifie pour cette semaine");
+  if (!resolvedRecipeCount || !needs.size) {
+    throw unprocessable("Aucun ingredient trouve pour les recettes planifiees");
+  }
 
   await subtractInventory(user._id, needs);
 
   const items = [...needs.values()]
     .filter((need) => roundQuantity(need.quantity) > 0)
-    .map((need) => serializeNeed(need, false))
+    .map((need) => serializeNeed(need, checkedMap.get(buildNeedKey(need.normalizedName, need.unit)) || false))
     .sort((a, b) => a.category.localeCompare(b.category) || a.ingredientName.localeCompare(b.ingredientName));
 
   return ShoppingList.findOneAndUpdate(
@@ -236,11 +236,11 @@ export async function setShoppingListItemChecked(userId, itemId, checked) {
   if (!list) throw notFound("Shopping list item not found");
 
   const item = list.items.id(itemId);
+  if (item.checked === checked) return list;
 
-  if (checked && !item.checked) {
-    await addItemToInventory(userId, item);
-  }
-  if (!checked && item.checked) {
+  if (checked) {
+    await mergeItemIntoInventory(userId, item);
+  } else {
     await removeItemFromInventory(userId, item);
   }
 
@@ -256,7 +256,7 @@ export async function addShoppingListItemToInventory(userId, itemId) {
 
   const item = list.items.id(itemId);
   if (!item.checked) {
-    await addItemToInventory(userId, item);
+    await mergeItemIntoInventory(userId, item);
   }
 
   item.checked = true;
@@ -274,4 +274,15 @@ export async function addCheckedItemsToInventory(userId, shoppingListId) {
   }
 
   return ShoppingList.findOne({ _id: shoppingListId, userId });
+}
+
+export async function completeCheckedItems(userId, week) {
+  const weekStartDate = normalizeWeekStartDate(week);
+  const list = await ShoppingList.findOne({ userId, weekStartDate });
+  if (!list) throw notFound("Shopping list not found");
+
+  list.items = list.items.filter((item) => !item.checked);
+  list.isCompleted = list.items.length > 0 && list.items.every((entry) => entry.checked);
+  await list.save();
+  return list;
 }

@@ -52,27 +52,34 @@ function resolveServings(requestedServings, user, recipe) {
   return Number.isFinite(recipeServings) && recipeServings >= 1 ? Math.round(recipeServings) : 1;
 }
 
-function serializeRecipeForPlanning(recipe) {
+function buildRecipeSnapshot(recipe) {
   return {
-    id: recipe.externalId || String(recipe._id),
+    id: recipe.externalId || String(recipe._id || recipe.id),
     source: recipe.source,
     title: recipe.title || recipe.name,
     image: recipe.image,
     preparationTime: recipe.preparationTime || 0,
-    calories: recipe.nutrition?.calories || 0,
     servings: recipe.servings || 1,
-    ingredients: (recipe.ingredients || []).map((ingredient) => ({ ...ingredient })),
-    instructions: [...(recipe.instructions || [])],
-    nutrition: { ...(recipe.nutrition || {}) }
+    nutrition: recipe.nutrition || {},
+    ingredients: recipe.ingredients || []
   };
 }
 
 function serializeMealPlan(plan, recipe) {
   const obj = plan.toObject ? plan.toObject() : plan;
-  return recipe
+  const resolvedRecipe = recipe || obj.recipeSnapshot;
+  return resolvedRecipe
     ? {
         ...obj,
-        recipe: serializeRecipeForPlanning(recipe)
+        recipe: {
+          id: resolvedRecipe.externalId || resolvedRecipe.id || String(resolvedRecipe._id),
+          source: resolvedRecipe.source || obj.recipeSource,
+          title: resolvedRecipe.title || resolvedRecipe.name,
+          image: resolvedRecipe.image,
+          preparationTime: resolvedRecipe.preparationTime || 0,
+          calories: resolvedRecipe.nutrition?.calories || 0,
+          servings: resolvedRecipe.servings || 1
+        }
       }
     : obj;
 }
@@ -83,7 +90,7 @@ export async function listMealPlansForWeek(user, week) {
 
   const serializedPlans = await Promise.all(
     plans.map(async (plan) => {
-      const recipe = await getRecipeById(plan.recipeId, plan.recipeSource);
+      const recipe = plan.recipeSnapshot || await getRecipeById(plan.recipeId, plan.recipeSource);
       return serializeMealPlan(plan, recipe);
     })
   );
@@ -113,6 +120,7 @@ export async function createOrReplaceMealPlan(user, payload) {
       mealType: payload.mealType,
       recipeId: payload.recipeId,
       recipeSource: payload.recipeSource,
+      recipeSnapshot: buildRecipeSnapshot(recipe),
       servings
     },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
@@ -132,6 +140,7 @@ export async function updateMealPlan(user, id, payload) {
     recipe = await readRecipe(recipeId, recipeSource);
     existing.recipeId = recipeId;
     existing.recipeSource = recipeSource;
+    existing.recipeSnapshot = buildRecipeSnapshot(recipe);
   }
 
   if (payload.servings !== undefined) {

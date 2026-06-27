@@ -1,21 +1,118 @@
 import asyncHandler from "express-async-handler";
-import mongoose from "mongoose";
-import { MealPlan } from "../models/MealPlan.js";
 import { Recipe } from "../models/Recipe.js";
-import { listRecipes, getRecipeById, getRecipeSuggestions, listUserRecipes } from "../services/recipeService.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
+import {
+  getRecipeById,
+  getRecipeSuggestions,
+  listRecipes,
+  searchRecipesLegacy,
+  searchSpoonacularRecipes,
+  SpoonacularApiError
+} from "../services/recipeService.js";
+
+function badRequest(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function forbidden(message) {
+  const error = new Error(message);
+  error.statusCode = 403;
+  return error;
+}
+
+function notFound(message) {
+  const error = new Error(message);
+  error.statusCode = 404;
+  return error;
+}
+
+function normalizeRecipePayload(body) {
+  const ingredients = Array.isArray(body.ingredients)
+    ? body.ingredients
+        .map((ingredient) => ({
+          ingredientName: String(ingredient.ingredientName || ingredient.name || "").trim(),
+          normalizedName: normalizeIngredientName(ingredient.ingredientName || ingredient.name),
+          quantity: Number(ingredient.quantity || 0),
+          unit: normalizeUnit(ingredient.unit),
+          category: String(ingredient.category || "autres").trim().toLowerCase()
+        }))
+        .filter((ingredient) => ingredient.ingredientName && ingredient.quantity > 0)
+    : [];
+
+  if (!String(body.title || "").trim()) {
+    throw badRequest("Le titre de la recette est requis");
+  }
+
+  if (!ingredients.length) {
+    throw badRequest("Ajoutez au moins un ingredient avec une quantite");
+  }
+
+  return {
+    title: String(body.title).trim(),
+    image: String(body.image || "").trim() || "https://images.unsplash.com/photo-1547592180-85f173990554",
+    preparationTime: Number(body.preparationTime || 20),
+    servings: Number(body.servings || 1),
+    ingredients,
+    instructions: Array.isArray(body.instructions)
+      ? body.instructions.map((instruction) => String(instruction).trim()).filter(Boolean)
+      : [],
+    nutrition: body.nutrition || {},
+    categories: Array.isArray(body.categories) ? body.categories : []
+  };
+}
 
 export const searchRecipes = asyncHandler(async (req, res) => {
-  res.json(await listRecipes({ q: req.query.q, userId: req.user?._id }));
+  res.json(await searchRecipesLegacy({ q: req.query.q }));
 });
 
-export const myRecipes = asyncHandler(async (req, res) => {
-  res.json(await listUserRecipes(req.user));
+export const recipeCatalog = asyncHandler(async (req, res) => {
+  const source = req.query.source || "all";
+  if (source === "api") {
+    try {
+      res.json(await searchSpoonacularRecipes({ q: req.query.q, page: req.query.page, limit: req.query.limit, filters: req.query }));
+    } catch (error) {
+      if (!(error instanceof SpoonacularApiError)) throw error;
+
+      const fallback = await listRecipes({
+        q: req.query.q,
+        page: req.query.page,
+        limit: req.query.limit,
+        source: "mealizy",
+        filters: req.query
+      });
+
+      res.json({
+        ...fallback,
+        source: "api",
+        fallback: {
+          active: true,
+          source: "mealizy",
+          reason: error.reason,
+          spoonacularStatus: error.spoonacularStatus,
+          message: error.responseMessage || error.message
+        }
+      });
+    }
+    return;
+  }
+
+  res.json(
+    await listRecipes({
+      q: req.query.q,
+      page: req.query.page,
+      limit: req.query.limit,
+      source,
+      user: req.user,
+      filters: req.query
+    })
+  );
 });
 
 export const suggestions = asyncHandler(async (req, res) => {
-  res.json(await getRecipeSuggestions(req.user));
+  res.json(await getRecipeSuggestions(req.user, req.query));
 });
 
 export const recipeDetail = asyncHandler(async (req, res) => {
@@ -28,42 +125,9 @@ export const recipeDetail = asyncHandler(async (req, res) => {
   res.json(recipe);
 });
 
-function notFound(message) {
-  const error = new Error(message);
-  error.statusCode = 404;
-  return error;
-}
-
-function conflict(message) {
-  const error = new Error(message);
-  error.statusCode = 409;
-  return error;
-}
-
-function buildRecipePayload(body) {
-  const ingredients = (body.ingredients || []).map((ingredient) => ({
-    ingredientName: ingredient.ingredientName,
-    normalizedName: ingredient.normalizedName || normalizeIngredientName(ingredient.ingredientName),
-    quantity: Number(ingredient.quantity || 0),
-    unit: normalizeUnit(ingredient.unit || "unit"),
-    category: ingredient.category || "autres"
-  }));
-
-  return {
-    title: body.title,
-    image: body.image || "",
-    ingredients,
-    instructions: body.instructions || [],
-    preparationTime: Number(body.preparationTime || 20),
-    servings: Number(body.servings || 2),
-    nutrition: body.nutrition || {},
-    requiredEquipments: body.requiredEquipments || []
-  };
-}
-
 export const createCustomRecipe = asyncHandler(async (req, res) => {
   const recipe = await Recipe.create({
-    ...buildRecipePayload(req.body),
+    ...normalizeRecipePayload(req.body),
     source: "user",
     userId: req.user._id
   });
@@ -71,32 +135,13 @@ export const createCustomRecipe = asyncHandler(async (req, res) => {
 });
 
 export const updateCustomRecipe = asyncHandler(async (req, res) => {
-  if (!mongoose.isValidObjectId(req.params.id)) throw notFound("Recipe not found");
-
-  const recipe = await Recipe.findOne({ _id: req.params.id, userId: req.user._id, source: "user" });
+  const recipe = await Recipe.findById(req.params.id);
   if (!recipe) throw notFound("Recipe not found");
-
-  Object.assign(recipe, buildRecipePayload(req.body));
-  await recipe.save();
-  res.json(recipe);
-});
-
-export const deleteCustomRecipe = asyncHandler(async (req, res) => {
-  if (!mongoose.isValidObjectId(req.params.id)) throw notFound("Recipe not found");
-
-  const recipe = await Recipe.findOne({ _id: req.params.id, userId: req.user._id, source: "user" });
-  if (!recipe) throw notFound("Recipe not found");
-
-  const plannedCount = await MealPlan.countDocuments({
-    userId: req.user._id,
-    recipeSource: "user",
-    recipeId: String(recipe._id)
-  });
-
-  if (plannedCount > 0) {
-    throw conflict("Cette recette est utilisée dans un planning. Retirez-la du planning avant de la supprimer.");
+  if (recipe.source !== "user" || String(recipe.userId) !== String(req.user._id)) {
+    throw forbidden("Vous ne pouvez modifier que vos recettes personnelles");
   }
 
-  await Recipe.deleteOne({ _id: recipe._id, userId: req.user._id });
-  res.status(204).send();
+  Object.assign(recipe, normalizeRecipePayload(req.body), { source: "user", userId: req.user._id });
+  await recipe.save();
+  res.json(recipe);
 });

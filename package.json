@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "build": "node -e \"console.log('No build step required for Mealizy API')\"",
     "start": "node src/server.js",
-    "lint": "eslint src --ext .js"
+    "lint": "eslint src --ext .js",
+    "seed:demo-recipes": "node src/scripts/seedDemoRecipes.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

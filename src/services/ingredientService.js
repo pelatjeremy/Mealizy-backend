@@ -5,10 +5,7 @@ export async function findOrCreateIngredient({ name, category = "autres" }) {
   const normalizedName = normalizeIngredientName(name);
   return Ingredient.findOneAndUpdate(
     { normalizedName },
-    {
-      $set: { category },
-      $setOnInsert: { name, normalizedName }
-    },
+    { $setOnInsert: { name, normalizedName, category } },
     { upsert: true, new: true }
   );
 }

@@ -9,7 +9,24 @@ function serializeUser(user) {
 }
 
 export const register = asyncHandler(async (req, res) => {
-  const user = await User.create(req.body);
+  const firstname = String(req.body.firstname || req.body.name || "").trim();
+  const lastname = String(req.body.lastname || "").trim() || "Mealizy";
+  const email = String(req.body.email || "").toLowerCase().trim();
+  const password = String(req.body.password || "");
+
+  if (!firstname || !email || password.length < 8) {
+    const error = new Error("Prenom, email et mot de passe de 8 caracteres minimum requis");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await User.create({
+    ...req.body,
+    firstname,
+    lastname,
+    email,
+    password
+  });
   res.status(201).json({ user: serializeUser(user), token: signToken(user._id) });
 });
 
