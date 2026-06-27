@@ -17,7 +17,17 @@ app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || env.corsOrigins.includes(origin)) {
+      const isMealizyFrontendPreview = (() => {
+        if (!origin) return false;
+        try {
+          const { hostname } = new URL(origin);
+          return hostname.endsWith(".vercel.app") && hostname.startsWith("mealizy-frontend");
+        } catch {
+          return false;
+        }
+      })();
+
+      if (!origin || env.corsOrigins.includes(origin) || isMealizyFrontendPreview) {
         callback(null, true);
         return;
       }
@@ -43,3 +53,5 @@ app.use("/api/shopping-list", shoppingListRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
+
+export default app;

@@ -40,9 +40,14 @@ const recipeSchema = new mongoose.Schema(
     preparationTime: { type: Number, default: 20 },
     servings: { type: Number, default: 2 },
     nutrition: { type: nutritionSchema, default: () => ({}) },
-    requiredEquipments: { type: [String], default: [] }
+    requiredEquipments: { type: [String], default: [] },
+    categories: { type: [String], default: [] },
+    diets: { type: [String], default: [] }
   },
   { timestamps: true }
 );
+
+recipeSchema.index({ source: 1, userId: 1, title: 1 });
+recipeSchema.index({ externalId: 1, source: 1 });
 
 export const Recipe = mongoose.model("Recipe", recipeSchema);

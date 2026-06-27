@@ -7,6 +7,8 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, minlength: 8, select: false },
     firstname: { type: String, required: true, trim: true },
     lastname: { type: String, required: true, trim: true },
+    username: { type: String, trim: true },
+    source: { type: String, enum: ["user", "seed"], default: "user" },
     householdSize: { type: Number, default: 2, min: 1 },
     enabledMealTypes: {
       type: [String],
