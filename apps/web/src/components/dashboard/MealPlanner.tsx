@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Apple, BookOpen, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, Sun, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { deleteMealPlan, getMealPlans, getProfile, readAuthToken, updateMealPlan } from "@/lib/api";
+import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
 import type { MealPlan, MealPlanDay, MealType, UserProfile } from "@/types/domain";
 
 const dayKeys: MealPlanDay[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
@@ -14,18 +15,6 @@ const mealRows: { key: MealType; label: string; icon: typeof Coffee }[] = [
   { key: "dinner", label: "Diner", icon: Moon },
   { key: "snack", label: "Collation", icon: Apple }
 ];
-
-function formatDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function getMonday(date = new Date()) {
-  const monday = new Date(date);
-  const day = monday.getDay() || 7;
-  monday.setDate(monday.getDate() - day + 1);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
-}
 
 function addWeeks(date: Date, amount: number) {
   const next = new Date(date);
@@ -99,9 +88,9 @@ export function MealPlanner() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [plans, setPlans] = useState<MealPlan[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [weekStart, setWeekStart] = useState(() => getMonday());
+  const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
-  const week = formatDateInput(weekStart);
+  const week = formatWeekParam(weekStart);
 
   const visibleMeals = useMemo(() => {
     const enabled = profile?.enabledMealTypes?.length ? profile.enabledMealTypes : mealRows.map((meal) => meal.key);
@@ -194,7 +183,7 @@ export function MealPlanner() {
             <ChevronRight size={17} />
           </button>
         </div>
-        <button type="button" className="outline-action compact-action" onClick={() => setWeekStart(getMonday())}>
+        <button type="button" className="outline-action compact-action" onClick={() => setWeekStart(getWeekStart())}>
           Semaine actuelle
         </button>
       </div>

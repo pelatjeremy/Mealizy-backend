@@ -1,5 +1,4 @@
-import { inventory, recipes, shoppingList } from "./demo-data";
-import type { MealPlan, MealPlanDay, MealType, Recipe, RecipeSuggestionGroups, ShoppingList, UserProfile } from "@/types/domain";
+import type { InventoryItem, MealPlan, MealPlanDay, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, ShoppingList, UserProfile } from "@/types/domain";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -12,17 +11,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("NEXT_PUBLIC_API_URL is required");
   }
 
+  const apiUrl = new URL(API_URL);
+  const apiPath = apiUrl.pathname.endsWith("/") ? apiUrl.pathname.slice(0, -1) : apiUrl.pathname;
+  const requestPath = path.startsWith("/") ? path : `/${path}`;
+  const url = new URL(`${apiPath}${requestPath}`, apiUrl.origin);
+  apiUrl.searchParams.forEach((value, key) => url.searchParams.set(key, value));
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(url.toString(), {
       ...init,
       headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
       signal: controller.signal,
       cache: "no-store"
     });
-    if (!response.ok) throw new Error("API request failed");
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.message || `API request failed (${response.status})`);
+    }
     if (response.status === 204) return undefined as T;
     return response.json();
   } finally {
@@ -30,10 +38,70 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-export async function getRecipeSuggestions(token: string) {
-  return request<RecipeSuggestionGroups>("/recipes/suggestions", {
+export async function getRecipeSuggestions(token: string, params: Record<string, string | number | undefined> = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && String(value).trim() !== "") query.set(key, String(value));
+  });
+
+  return request<Recipe[]>(`/recipes/suggestions?${query.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+}
+
+export async function getRecipeCatalog(token: string, params: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && String(value).trim() !== "") query.set(key, String(value));
+  });
+
+  return request<RecipeCatalogResponse>(`/recipes/catalog?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createRecipe(token: string, payload: {
+  title: string;
+  image?: string;
+  preparationTime: number;
+  servings: number;
+  ingredients: Array<{
+    ingredientName: string;
+    quantity: number;
+    unit: string;
+    category: string;
+  }>;
+  instructions: string[];
+}) {
+  return request<Recipe>("/recipes", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateRecipe(token: string, id: string, payload: {
+  title: string;
+  image?: string;
+  preparationTime: number;
+  servings: number;
+  ingredients: Array<{
+    ingredientName: string;
+    quantity: number;
+    unit: string;
+    category: string;
+  }>;
+  instructions: string[];
+}) {
+  return request<Recipe>(`/recipes/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function readCatalogSource(source: string): RecipeCatalogSource {
+  return source === "mine" || source === "mealizy" || source === "api" ? source : "all";
 }
 
 export async function getRecipe(id: string, source?: Recipe["source"], token?: string) {
@@ -72,6 +140,12 @@ export async function register(payload: { firstname: string; lastname: string; e
 
 export async function getProfile(token: string) {
   return request<UserProfile>("/users/profile", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function getInventory(token: string) {
+  return request<InventoryItem[]>("/inventory", {
     headers: { Authorization: `Bearer ${token}` }
   });
 }
@@ -150,19 +224,11 @@ export async function updateShoppingListItemChecked(token: string, id: string, c
   return normalizeShoppingList(list);
 }
 
-export async function addShoppingListItemToInventory(token: string, id: string) {
-  const list = await request<ShoppingList>(`/shopping-list/items/${id}/add-to-inventory`, {
+export async function completeShoppingList(token: string, week: string) {
+  const list = await request<ShoppingList>("/shopping-list/complete", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ week })
   });
   return normalizeShoppingList(list);
-}
-
-export async function getDashboardData() {
-  try {
-    const [recipeResults] = await Promise.all([request<typeof recipes>("/recipes/search")]);
-    return { inventory, shoppingList, recipes: recipeResults };
-  } catch {
-    return { inventory, shoppingList, recipes };
-  }
 }

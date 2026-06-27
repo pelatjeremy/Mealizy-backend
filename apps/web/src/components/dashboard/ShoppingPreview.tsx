@@ -5,7 +5,7 @@ export function ShoppingPreview({ items }: { items: ShoppingItem[] }) {
     <section className="panel shopping-preview">
       <div className="panel-header compact">
         <h2>Liste de courses</h2>
-        <span>{items.length} produits</span>
+        <span>{items.length} produit{items.length > 1 ? "s" : ""}</span>
       </div>
       <ul className="shopping-list">
         {items.map((item) => (

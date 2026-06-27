@@ -22,12 +22,15 @@ export function InventoryPreview({ items }: { items: InventoryItem[] }) {
         <tbody>
           {items.map((item, index) => {
             const Icon = icons[index] || Package2;
+            const itemName = item.name || item.ingredientId?.name || "Produit";
+            const category = item.category || item.ingredientId?.category || "Autres";
+            const expirationDate = item.expirationDate ? new Date(item.expirationDate).toLocaleDateString("fr-FR") : "-";
             return (
-              <tr key={item.id}>
-                <td><Icon size={20} /> {item.name}</td>
+              <tr key={item.id || item._id || itemName}>
+                <td><Icon size={20} /> {itemName}</td>
                 <td>{item.quantity} {item.unit}</td>
-                <td>{item.category}</td>
-                <td>{new Date(item.expirationDate).toLocaleDateString("fr-FR")}</td>
+                <td>{category}</td>
+                <td>{expirationDate}</td>
               </tr>
             );
           })}

@@ -3,10 +3,10 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 const data = [
-  { name: "Glucides", value: 45, color: "#39a96b" },
-  { name: "Protéines", value: 25, color: "#3b82f6" },
-  { name: "Lipides", value: 25, color: "#f59e0b" },
-  { name: "Autres", value: 5, color: "#a78bfa" }
+  { name: "Glucides", value: 0, color: "#39a96b" },
+  { name: "Protéines", value: 0, color: "#3b82f6" },
+  { name: "Lipides", value: 0, color: "#f59e0b" },
+  { name: "Autres", value: 0, color: "#a78bfa" }
 ];
 
 export function NutritionPanel() {
@@ -22,7 +22,7 @@ export function NutritionPanel() {
               </Pie>
             </PieChart>
           </ResponsiveContainer>
-          <span><strong>1 850</strong> kcal</span>
+          <span><strong>0</strong> kcal</span>
         </div>
         <ul>
           {data.map((entry) => (

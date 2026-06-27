@@ -7,10 +7,10 @@ function group(recipes: Recipe[], missingCount: number) {
 
 export function RecipeSuggestions({ recipes }: { recipes: Recipe[] }) {
   const sections = [
-    { title: "Vous avez tous les ingrédients", subtitle: "12", tone: "ready", items: group(recipes, 0), icon: ShieldCheck },
-    { title: "Il manque 1 ingrédient", subtitle: "8", tone: "warn", items: group(recipes, 1), icon: Sparkles },
-    { title: "Il manque 2 ingrédients", subtitle: "5", tone: "warn", items: group(recipes, 2), icon: Sparkles },
-    { title: "Il manque 3 ingrédients", subtitle: "3", tone: "danger", items: group(recipes, 3), icon: Sparkles }
+    { title: "Vous avez tous les ingredients", tone: "ready", items: group(recipes, 0), icon: ShieldCheck },
+    { title: "Il manque 1 ingredient", tone: "warn", items: group(recipes, 1), icon: Sparkles },
+    { title: "Il manque 2 ingredients", tone: "warn", items: group(recipes, 2), icon: Sparkles },
+    { title: "Il manque 3 ingredients", tone: "danger", items: group(recipes, 3), icon: Sparkles }
   ];
 
   return (
@@ -18,7 +18,7 @@ export function RecipeSuggestions({ recipes }: { recipes: Recipe[] }) {
       <div className="panel-header compact">
         <div>
           <h2>Suggestions de recettes</h2>
-          <p>Basées sur votre inventaire</p>
+          <p>Basees sur votre inventaire</p>
         </div>
         <Info size={20} />
       </div>
@@ -26,12 +26,12 @@ export function RecipeSuggestions({ recipes }: { recipes: Recipe[] }) {
         <div className="suggestion-group" key={section.title}>
           <h3 className={section.tone}>
             <section.icon size={16} />
-            {section.title} ({section.subtitle})
+            {section.title} ({section.items.length})
           </h3>
           <div className="recipe-row">
             {section.items.map((recipe) => (
-              <article className="recipe-mini" key={recipe.externalId}>
-                <img src={recipe.image} alt="" />
+              <article className="recipe-mini" key={recipe.externalId || recipe._id || recipe.title}>
+                {recipe.image && <img src={recipe.image} alt="" />}
                 <strong>{recipe.title}</strong>
               </article>
             ))}

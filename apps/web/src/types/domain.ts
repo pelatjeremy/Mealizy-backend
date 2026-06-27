@@ -17,6 +17,9 @@ export type Recipe = {
   image?: string;
   preparationTime: number;
   servings: number;
+  score?: number;
+  coverage?: number;
+  availableIngredientCount?: number;
   missingCount?: number;
   missingIngredients?: RecipeIngredient[];
   nutrition: {
@@ -28,23 +31,39 @@ export type Recipe = {
   ingredients: RecipeIngredient[];
   instructions?: string[];
   requiredEquipments?: string[];
+  categories?: string[];
+  diets?: string[];
 };
 
-export type RecipeSuggestionGroups = {
-  complete: Recipe[];
-  missing1: Recipe[];
-  missing2: Recipe[];
-  missing3: Recipe[];
-  missingMore: Recipe[];
+export type RecipeCatalogSource = "mine" | "mealizy" | "api" | "all";
+
+export type RecipeCatalogResponse = {
+  items: Recipe[];
+  total: number;
+  page: number;
+  limit: number;
+  source: RecipeCatalogSource;
+  fallback?: {
+    active: boolean;
+    source: "mealizy";
+    reason: "quota_exceeded" | "invalid_key" | "network_error" | "unexpected_format" | "bad_request" | "spoonacular_unavailable" | "unknown";
+    spoonacularStatus: number | null;
+    message: string;
+  };
 };
 
 export type InventoryItem = {
-  id: string;
-  name: string;
+  id?: string;
+  _id?: string;
+  name?: string;
+  ingredientId?: {
+    name?: string;
+    category?: string;
+  };
   quantity: number;
   unit: string;
-  category: string;
-  expirationDate: string;
+  category?: string;
+  expirationDate?: string;
 };
 
 export type ShoppingItem = {

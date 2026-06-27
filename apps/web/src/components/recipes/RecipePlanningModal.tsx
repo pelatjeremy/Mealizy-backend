@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { CalendarPlus, X } from "lucide-react";
 import { createMealPlan, getApiErrorMessage } from "@/lib/api";
+import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
 import type { MealPlanDay, MealType, Recipe, UserProfile } from "@/types/domain";
 
 const days: { key: MealPlanDay; label: string }[] = [
@@ -22,16 +23,10 @@ const mealTypes: { key: MealType; label: string }[] = [
   { key: "snack", label: "Collation" }
 ];
 
-function getMonday() {
-  const date = new Date();
-  const day = date.getDay() || 7;
-  date.setDate(date.getDate() - day + 1);
-  date.setHours(0, 0, 0, 0);
-  return date.toISOString().slice(0, 10);
-}
-
 function recipeSource(recipe: Recipe): "api" | "user" | "demo" {
-  return recipe.source || (recipe.externalId?.startsWith("demo-") ? "demo" : "user");
+  if (recipe.source === "api") return "api";
+  if (recipe.externalId?.startsWith("demo-")) return "demo";
+  return "user";
 }
 
 export function recipeId(recipe: Recipe) {
@@ -51,7 +46,7 @@ export function RecipePlanningModal({
 }) {
   const enabledMealTypes = profile?.enabledMealTypes?.length ? profile.enabledMealTypes : mealTypes.map((meal) => meal.key);
   const visibleMealTypes = mealTypes.filter((meal) => enabledMealTypes.includes(meal.key));
-  const [weekStartDate, setWeekStartDate] = useState(getMonday());
+  const [weekStartDate, setWeekStartDate] = useState(() => formatWeekParam(getWeekStart()));
   const [day, setDay] = useState<MealPlanDay>("monday");
   const [mealType, setMealType] = useState<MealType>(visibleMealTypes[0]?.key || "lunch");
   const [servings, setServings] = useState(profile?.householdSize || recipe.servings || 1);
