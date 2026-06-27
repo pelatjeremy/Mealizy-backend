@@ -1,4 +1,4 @@
-import { app } from "../src/app.js";
+import app from "../src/app.js";
 import { connectDb } from "../src/config/db.js";
 
 let dbConnectionPromise;

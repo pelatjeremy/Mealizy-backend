@@ -25,6 +25,12 @@ function badRequest(message) {
   return error;
 }
 
+function unprocessable(message) {
+  const error = new Error(message);
+  error.statusCode = 422;
+  return error;
+}
+
 function findUnitFamily(unit) {
   const normalizedUnit = normalizeUnit(unit);
   const family = Object.values(unitFamilies).find((candidate) => candidate.factors[normalizedUnit]);
@@ -82,6 +88,38 @@ function toInventoryUnit(unit) {
   return normalizeUnit(unit);
 }
 
+async function mergeItemIntoInventory(userId, item) {
+  const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
+
+  await InventoryItem.findOneAndUpdate(
+    { userId, ingredientId: ingredient._id, unit: toInventoryUnit(item.unit) },
+    {
+      $inc: { quantity: item.quantity },
+      $set: { normalizedName: ingredient.normalizedName }
+    },
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+  );
+}
+
+async function removeItemFromInventory(userId, item) {
+  const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
+  const inventoryItem = await InventoryItem.findOne({
+    userId,
+    ingredientId: ingredient._id,
+    unit: toInventoryUnit(item.unit)
+  });
+
+  if (!inventoryItem) return;
+
+  inventoryItem.quantity = roundQuantity(Number(inventoryItem.quantity || 0) - Number(item.quantity || 0));
+  if (inventoryItem.quantity <= 0) {
+    await inventoryItem.deleteOne();
+    return;
+  }
+
+  await inventoryItem.save();
+}
+
 function previousCheckedMap(existingList) {
   return new Map(
     (existingList?.items || [])
@@ -93,10 +131,12 @@ function previousCheckedMap(existingList) {
 async function getPlannedNeeds(user, weekStartDate) {
   const plans = await MealPlan.find({ userId: user._id, weekStartDate }).lean();
   const needs = new Map();
+  let resolvedRecipeCount = 0;
 
   for (const plan of plans) {
-    const recipe = await getRecipeById(plan.recipeId, plan.recipeSource);
+    const recipe = plan.recipeSnapshot || await getRecipeById(plan.recipeId, plan.recipeSource);
     if (!recipe) continue;
+    resolvedRecipeCount += 1;
 
     const recipeServings = Math.max(Number(recipe.servings || 1), 1);
     const plannedServings = Math.max(Number(plan.servings || recipeServings), 1);
@@ -126,7 +166,7 @@ async function getPlannedNeeds(user, weekStartDate) {
     }
   }
 
-  return needs;
+  return { needs, planCount: plans.length, resolvedRecipeCount };
 }
 
 async function subtractInventory(userId, needs) {
@@ -162,7 +202,12 @@ export async function generateShoppingList(user, week) {
   const weekStartDate = normalizeWeekStartDate(week);
   const existingList = await ShoppingList.findOne({ userId: user._id, weekStartDate });
   const checkedMap = previousCheckedMap(existingList);
-  const needs = await getPlannedNeeds(user, weekStartDate);
+  const { needs, planCount, resolvedRecipeCount } = await getPlannedNeeds(user, weekStartDate);
+
+  if (!planCount) throw badRequest("Aucun repas planifie pour cette semaine");
+  if (!resolvedRecipeCount || !needs.size) {
+    throw unprocessable("Aucun ingredient trouve pour les recettes planifiees");
+  }
 
   await subtractInventory(user._id, needs);
 
@@ -191,6 +236,14 @@ export async function setShoppingListItemChecked(userId, itemId, checked) {
   if (!list) throw notFound("Shopping list item not found");
 
   const item = list.items.id(itemId);
+  if (item.checked === checked) return list;
+
+  if (checked) {
+    await mergeItemIntoInventory(userId, item);
+  } else {
+    await removeItemFromInventory(userId, item);
+  }
+
   item.checked = checked;
   list.isCompleted = list.items.length > 0 && list.items.every((entry) => entry.checked);
   await list.save();
@@ -202,16 +255,9 @@ export async function addShoppingListItemToInventory(userId, itemId) {
   if (!list) throw notFound("Shopping list item not found");
 
   const item = list.items.id(itemId);
-  const ingredient = await findOrCreateIngredient({ name: item.ingredientName, category: item.category });
-
-  await InventoryItem.findOneAndUpdate(
-    { userId, ingredientId: ingredient._id, unit: toInventoryUnit(item.unit) },
-    {
-      $inc: { quantity: item.quantity },
-      $set: { normalizedName: ingredient.normalizedName }
-    },
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
-  );
+  if (!item.checked) {
+    await mergeItemIntoInventory(userId, item);
+  }
 
   item.checked = true;
   list.isCompleted = list.items.length > 0 && list.items.every((entry) => entry.checked);
@@ -228,4 +274,15 @@ export async function addCheckedItemsToInventory(userId, shoppingListId) {
   }
 
   return ShoppingList.findOne({ _id: shoppingListId, userId });
+}
+
+export async function completeCheckedItems(userId, week) {
+  const weekStartDate = normalizeWeekStartDate(week);
+  const list = await ShoppingList.findOne({ userId, weekStartDate });
+  if (!list) throw notFound("Shopping list not found");
+
+  list.items = list.items.filter((item) => !item.checked);
+  list.isCompleted = list.items.length > 0 && list.items.every((entry) => entry.checked);
+  await list.save();
+  return list;
 }

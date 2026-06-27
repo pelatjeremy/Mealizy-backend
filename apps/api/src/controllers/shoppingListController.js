@@ -3,6 +3,7 @@ import { ShoppingList } from "../models/ShoppingList.js";
 import {
   addCheckedItemsToInventory,
   addShoppingListItemToInventory,
+  completeCheckedItems,
   generateShoppingList,
   getShoppingListForWeek,
   setShoppingListItemChecked
@@ -43,4 +44,8 @@ export const checkShoppingListItem = asyncHandler(async (req, res) => {
 
 export const addShoppingListItem = asyncHandler(async (req, res) => {
   res.json(await addShoppingListItemToInventory(req.user._id, req.params.id));
+});
+
+export const completeShoppingList = asyncHandler(async (req, res) => {
+  res.json(await completeCheckedItems(req.user._id, req.body.week || req.query.week));
 });
