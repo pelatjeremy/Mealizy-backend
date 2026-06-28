@@ -3,13 +3,14 @@ import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
 
 export class SpoonacularApiError extends Error {
-  constructor(message, { statusCode = 502, spoonacularStatus = null, reason = "unknown", responseMessage = "" } = {}) {
+  constructor(message, { statusCode = 502, spoonacularStatus = null, reason = "unknown", responseMessage = "", quota = null } = {}) {
     super(message);
     this.name = "SpoonacularApiError";
     this.statusCode = statusCode;
     this.spoonacularStatus = spoonacularStatus;
     this.reason = reason;
     this.responseMessage = responseMessage;
+    this.quota = quota;
   }
 }
 
@@ -38,6 +39,24 @@ function classifySpoonacularError(status, payload) {
   if (status >= 400 && status < 500) return "bad_request";
   if (status >= 500) return "spoonacular_unavailable";
   return "unknown";
+}
+
+function readQuotaHeaders(headers) {
+  const readNumber = (...names) => {
+    for (const name of names) {
+      const value = headers.get(name);
+      if (value === null) continue;
+      const number = Number(value);
+      if (Number.isFinite(number)) return number;
+    }
+    return null;
+  };
+
+  return {
+    remaining: readNumber("x-api-quota-left", "x-ratelimit-remaining", "x-api-quota-remaining"),
+    used: readNumber("x-api-quota-used", "x-ratelimit-used"),
+    requestCost: readNumber("x-api-quota-request")
+  };
 }
 
 function assertSpoonacularShape(payload, expectedShape) {
@@ -82,6 +101,7 @@ async function fetchSpoonacularJson(url, expectedShape) {
     });
   }
 
+  const quota = readQuotaHeaders(response.headers);
   const payload = await readSpoonacularPayload(response);
   if (!response.ok) {
     const reason = classifySpoonacularError(response.status, payload);
@@ -89,12 +109,13 @@ async function fetchSpoonacularJson(url, expectedShape) {
     throw new SpoonacularApiError("Spoonacular request failed", {
       spoonacularStatus: response.status,
       reason,
-      responseMessage: String(message || "")
+      responseMessage: String(message || ""),
+      quota
     });
   }
 
   assertSpoonacularShape(payload, expectedShape);
-  return payload;
+  return { payload, quota };
 }
 
 function compactStringList(values = []) {
@@ -198,7 +219,8 @@ export async function fetchSpoonacularRecipeById(recipeId) {
   url.searchParams.set("apiKey", env.spoonacularApiKey);
   url.searchParams.set("includeNutrition", "true");
 
-  return mapSpoonacularRecipe(await fetchSpoonacularJson(url, "detail"));
+  const { payload } = await fetchSpoonacularJson(url, "detail");
+  return mapSpoonacularRecipe(payload);
 }
 
 async function fetchSpoonacularRecipesByIds(recipeIds) {
@@ -209,7 +231,8 @@ async function fetchSpoonacularRecipesByIds(recipeIds) {
   url.searchParams.set("ids", recipeIds.join(","));
   url.searchParams.set("includeNutrition", "true");
 
-  return (await fetchSpoonacularJson(url, "bulk")).map(mapSpoonacularRecipe);
+  const { payload } = await fetchSpoonacularJson(url, "bulk");
+  return payload.map(mapSpoonacularRecipe);
 }
 
 export async function searchSpoonacularRecipes({ q, page = 1, limit = 12, filters = {}, inventoryMap } = {}) {
@@ -229,16 +252,18 @@ export async function searchSpoonacularRecipes({ q, page = 1, limit = 12, filter
   const includeIngredients = inventoryMap ? [...inventoryMap.keys()].slice(0, 20).join(",") : "";
   if (includeIngredients) url.searchParams.set("includeIngredients", includeIngredients);
 
-  const payload = await fetchSpoonacularJson(url, "catalog");
+  const { payload, quota } = await fetchSpoonacularJson(url, "catalog");
   const summaryItems = payload.results || [];
   const enrichedItems = await fetchSpoonacularRecipesByIds(summaryItems.map((recipe) => recipe.id).filter(Boolean));
   const items = enrichedItems.length === summaryItems.length ? enrichedItems : summaryItems.map(mapSpoonacularRecipe);
 
-  return {
+  const result = {
     items,
     total: payload.totalResults || 0,
     page: currentPage,
     limit: currentLimit,
     source: "api"
   };
+  if (quota.remaining !== null || quota.used !== null || quota.requestCost !== null) result.quota = quota;
+  return result;
 }

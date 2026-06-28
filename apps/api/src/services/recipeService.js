@@ -5,7 +5,6 @@ import { Recipe } from "../models/Recipe.js";
 import { User } from "../models/User.js";
 import {
   fetchSpoonacularRecipeById,
-  searchSpoonacularRecipes,
   SpoonacularApiError
 } from "./spoonacularService.js";
 import { normalizeRecipeIngredient } from "./ingredientMatcher.js";
@@ -104,6 +103,10 @@ export async function listRecipes({ q, page, limit, source = "all", user, filter
     query.source = "user";
   }
 
+  if (source === "api") {
+    query.sourceProvider = "spoonacular";
+  }
+
   if (source === "user") query.source = "user";
 
   const [items, total] = await Promise.all([
@@ -155,23 +158,10 @@ async function readImportedSpoonacularMap(recipes) {
 export async function searchRecipeLibrary({ q, page, limit, source = "all", user, filters = {} }) {
   const currentPage = clampPage(page);
   const currentLimit = clampLimit(limit);
-  const storedCatalog = await listRecipes({ q, page: currentPage, limit: currentLimit, source: source === "api" ? "all" : source, user, filters });
-
-  if (source !== "api" && source !== "all") return storedCatalog;
-
-  const apiCatalog = await searchSpoonacularRecipes({ q, page: currentPage, limit: currentLimit, filters });
-  const importedMap = await readImportedSpoonacularMap(apiCatalog.items);
-  const storedExternalIds = new Set(storedCatalog.items.map((recipe) => recipe.externalId).filter(Boolean).map(String));
-  const externalItems = apiCatalog.items
-    .map((recipe) => withImportStatus(recipe, importedMap))
-    .filter((recipe) => !storedExternalIds.has(String(recipe.externalId || "")));
-
+  const storedCatalog = await listRecipes({ q, page: currentPage, limit: currentLimit, source, user, filters });
   return {
-    items: [...storedCatalog.items.map((recipe) => withImportStatus(recipe, importedMap)), ...externalItems].slice(0, currentLimit),
-    total: Math.max(storedCatalog.total, storedCatalog.items.length) + apiCatalog.total,
-    page: currentPage,
-    limit: currentLimit,
-    source
+    ...storedCatalog,
+    items: storedCatalog.items.map((recipe) => withImportStatus(recipe, new Map()))
   };
 }
 
@@ -218,9 +208,7 @@ export async function importSpoonacularRecipe(recipeId, user) {
 
 export async function getRecipeById(recipeId, source) {
   if (source === "api") {
-    const cachedRecipe = await Recipe.findOne({ ...recipeIdQuery(recipeId), source: "api" }).lean();
-    if (cachedRecipe) return cachedRecipe;
-    return fetchSpoonacularRecipeById(recipeId).catch(() => null);
+    return Recipe.findOne({ ...recipeIdQuery(recipeId), sourceProvider: "spoonacular" }).lean();
   }
 
   const storedRecipe = await Recipe.findOne(recipeIdQuery(recipeId)).lean();
@@ -339,18 +327,12 @@ function filterScoredRecipe(recipe, filters = {}) {
 
 export async function getRecipeSuggestions(user, filters = {}) {
   const inventoryMap = await getInventoryMap(user._id);
-  const [apiCatalog, mealizyCatalog, userCatalog] = await Promise.all([
-    searchSpoonacularRecipes({ q: filters.q, page: 1, limit: 24, filters, inventoryMap }).catch(() => ({
-      items: [],
-      total: 0,
-      page: 1,
-      limit: 24,
-      source: "api"
-    })),
+  const [syncedCatalog, mealizyCatalog, userCatalog] = await Promise.all([
+    listRecipes({ q: filters.q, source: "api", limit: 24, filters }),
     listRecipes({ source: "mealizy", limit: 24, filters }),
     listRecipes({ source: "mine", user, limit: 24, filters })
   ]);
-  const recipes = [...userCatalog.items, ...mealizyCatalog.items, ...apiCatalog.items];
+  const recipes = [...userCatalog.items, ...mealizyCatalog.items, ...syncedCatalog.items];
 
   return recipes
     .map((recipe) => compareRecipeWithInventory(recipe, inventoryMap, user))

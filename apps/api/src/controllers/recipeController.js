@@ -6,10 +6,8 @@ import {
   getRecipeById,
   getRecipeSuggestions,
   importSpoonacularRecipe,
-  listRecipes,
   searchRecipeLibrary,
-  searchRecipesLegacy,
-  SpoonacularApiError
+  searchRecipesLegacy
 } from "../services/recipeService.js";
 import { getRecipeCompatibilityForUser } from "../services/recipeInventoryMatcher.js";
 
@@ -80,46 +78,8 @@ export const searchRecipes = asyncHandler(async (req, res) => {
 
 export const recipeCatalog = asyncHandler(async (req, res) => {
   const source = req.query.source || "all";
-  if (source === "api" || source === "all") {
-    try {
-      res.json(
-        await searchRecipeLibrary({
-          q: req.query.q,
-          page: req.query.page,
-          limit: req.query.limit,
-          source,
-          user: req.user,
-          filters: req.query
-        })
-      );
-    } catch (error) {
-      if (!(error instanceof SpoonacularApiError)) throw error;
-
-      const fallback = await listRecipes({
-        q: req.query.q,
-        page: req.query.page,
-        limit: req.query.limit,
-        source: "mealizy",
-        filters: req.query
-      });
-
-      res.json({
-        ...fallback,
-        source: "api",
-        fallback: {
-          active: true,
-          source: "mealizy",
-          reason: error.reason,
-          spoonacularStatus: error.spoonacularStatus,
-          message: error.responseMessage || error.message
-        }
-      });
-    }
-    return;
-  }
-
   res.json(
-    await listRecipes({
+    await searchRecipeLibrary({
       q: req.query.q,
       page: req.query.page,
       limit: req.query.limit,

@@ -1,16 +1,12 @@
 import type { InventoryItem, MealPlan, MealPlanDay, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, RecipeCompatibility, ShoppingList, UserProfile } from "@/types/domain";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 export function getApiErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!API_URL) {
-    throw new Error("NEXT_PUBLIC_API_URL is required");
-  }
-
   const apiUrl = new URL(API_URL);
   const apiPath = apiUrl.pathname.endsWith("/") ? apiUrl.pathname.slice(0, -1) : apiUrl.pathname;
   const requestPath = path.startsWith("/") ? path : `/${path}`;

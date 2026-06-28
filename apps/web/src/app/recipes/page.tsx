@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Download, Loader2, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { getProfile, getRecipeCatalog, importSpoonacularRecipe, readAuthToken } from "@/lib/api";
+import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
+import { getProfile, getRecipeCatalog, readAuthToken } from "@/lib/api";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 import type { Recipe, RecipeCatalogSource, UserProfile } from "@/types/domain";
@@ -13,7 +12,7 @@ const tabs: { key: RecipeCatalogSource; label: string }[] = [
   { key: "all", label: "Bibliotheque" },
   { key: "mine", label: "Mes recettes" },
   { key: "mealizy", label: "Recettes Mealizy" },
-  { key: "api", label: "Decouvrir" }
+  { key: "api", label: "Synchronisees" }
 ];
 
 const categoryOptions = [
@@ -38,12 +37,6 @@ function recipeSource(recipe: Recipe): "api" | "user" | "demo" {
   return "user";
 }
 
-function fallbackLabel(reason: string) {
-  if (reason === "quota_exceeded") return "Le quota Spoonacular est atteint. Les recettes Mealizy sont affichees temporairement.";
-  if (reason === "invalid_key") return "Spoonacular est indisponible en raison de sa configuration. Les recettes Mealizy sont affichees temporairement.";
-  return "Spoonacular est momentanement indisponible. Les recettes Mealizy sont affichees temporairement.";
-}
-
 function detailHref(recipe: Recipe) {
   const id = recipe.importedRecipeId || recipe.mealizyRecipeId || recipe._id || recipeId(recipe);
   return `/recipes/${encodeURIComponent(id)}?source=${encodeURIComponent(recipeSource(recipe))}`;
@@ -52,34 +45,25 @@ function detailHref(recipe: Recipe) {
 function RecipeCard({
   recipe,
   token,
-  importingId,
-  onImport,
   onPlan
 }: {
   recipe: Recipe;
   token: string;
-  importingId: string;
-  onImport: (recipe: Recipe) => void;
   onPlan: (recipe: Recipe) => void;
 }) {
-  const spoonacularId = recipe.sourceProvider === "spoonacular" || recipe.source === "api" ? recipe.externalId || recipe.id : "";
   const isImported = Boolean(recipe.isImported || recipe.importedRecipeId || recipe._id);
-  const canImport = Boolean(token && spoonacularId && !isImported);
 
   return (
     <article className="recipe-card">
       {recipe.image ? <img src={recipe.image} alt="" /> : <div className="recipe-image-placeholder">Mealizy</div>}
       <div>
         <div className={isImported ? "recipe-status imported" : "recipe-status external"}>
-          {isImported ? <CheckCircle2 size={15} /> : <Download size={15} />}
-          <span>{isImported ? "Dans Mealizy" : "Source Spoonacular"}</span>
+          <CheckCircle2 size={15} />
+          <span>{recipe.sourceProvider === "spoonacular" ? "Synchronisee" : "Dans Mealizy"}</span>
         </div>
         <Link href={detailHref(recipe)}><strong>{recipe.title}</strong></Link>
         <span>{recipe.preparationTime || recipe.readyInMinutes || 0} min - {recipe.nutrition?.calories || 0} kcal - {recipe.servings || 1} portions</span>
         <div className="recipe-card-actions">
-          <button className="outline-action" type="button" disabled={!canImport || importingId === spoonacularId} onClick={() => onImport(recipe)}>
-            {importingId === spoonacularId ? <Loader2 size={17} /> : <Download size={17} />} Importer
-          </button>
           <button className="outline-action" type="button" disabled={!token || !recipeId(recipe)} onClick={() => onPlan(recipe)}>
             <CalendarPlus size={17} /> Planifier
           </button>
@@ -90,7 +74,6 @@ function RecipeCard({
 }
 
 export default function RecipesPage() {
-  const router = useRouter();
   const [source, setSource] = useState<RecipeCatalogSource>("all");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
@@ -103,9 +86,6 @@ export default function RecipesPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [total, setTotal] = useState(0);
-  const [fallbackReason, setFallbackReason] = useState("");
-  const [importingId, setImportingId] = useState("");
-  const [notice, setNotice] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
 
@@ -125,7 +105,6 @@ export default function RecipesPage() {
   useEffect(() => {
     if (!token) return;
     setStatus("loading");
-    setFallbackReason("");
     getRecipeCatalog(token, {
       source,
       q: query,
@@ -140,7 +119,6 @@ export default function RecipesPage() {
       .then((result) => {
         setRecipes(result.items);
         setTotal(result.total);
-        setFallbackReason(result.fallback?.active ? result.fallback.reason : "");
         setStatus("ready");
       })
       .catch(() => setStatus("error"));
@@ -149,30 +127,6 @@ export default function RecipesPage() {
   function updateSource(nextSource: RecipeCatalogSource) {
     setSource(nextSource);
     setPage(1);
-  }
-
-  async function handleImport(recipe: Recipe) {
-    const externalId = recipe.externalId || recipe.id;
-    if (!token || !externalId) return;
-
-    setNotice("");
-    setImportingId(String(externalId));
-    try {
-      const imported = await importSpoonacularRecipe(token, String(externalId));
-      setRecipes((currentRecipes) =>
-        currentRecipes.map((item) =>
-          String(item.externalId || item.id) === String(externalId)
-            ? { ...item, isImported: true, importedRecipeId: imported._id, mealizyRecipeId: imported._id, _id: imported._id }
-            : item
-        )
-      );
-      setNotice("Recette importee dans Mealizy.");
-      router.push(`/recipes/${encodeURIComponent(imported._id || imported.externalId || String(externalId))}?source=api`);
-    } catch {
-      setNotice("Impossible d'importer cette recette pour le moment.");
-    } finally {
-      setImportingId("");
-    }
   }
 
   return (
@@ -200,8 +154,6 @@ export default function RecipesPage() {
       {status === "loading" && <div className="state-panel"><Loader2 size={22} /> Chargement des recettes</div>}
       {status === "missing-token" && <div className="state-panel">Connectez-vous pour consulter le catalogue et planifier vos repas.</div>}
       {status === "error" && <div className="state-panel">Impossible de charger les recettes.</div>}
-      {notice && <div className="state-panel notice-info">{notice}</div>}
-      {status === "ready" && fallbackReason && <div className="state-panel">{fallbackLabel(fallbackReason)}</div>}
 
       {status === "ready" && (
         <>
@@ -211,8 +163,6 @@ export default function RecipesPage() {
                 key={`${recipe.source}-${recipeId(recipe)}-${recipe.title}`}
                 recipe={recipe}
                 token={token}
-                importingId={importingId}
-                onImport={handleImport}
                 onPlan={setSelectedRecipe}
               />
             ))}

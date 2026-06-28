@@ -13,7 +13,15 @@ export const requireAuth = asyncHandler(async (req, _res, next) => {
     throw error;
   }
 
-  const payload = jwt.verify(token, env.jwtSecret);
+  let payload;
+  try {
+    payload = jwt.verify(token, env.jwtSecret);
+  } catch {
+    const error = new Error("Invalid or expired token");
+    error.statusCode = 401;
+    throw error;
+  }
+
   const user = await User.findById(payload.sub).select("-password");
 
   if (!user) {

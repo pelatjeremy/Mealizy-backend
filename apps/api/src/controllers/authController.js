@@ -2,6 +2,16 @@ import asyncHandler from "express-async-handler";
 import { User } from "../models/User.js";
 import { signToken } from "../services/tokenService.js";
 
+function authError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function isDuplicateEmailError(error) {
+  return error?.code === 11000 && (error?.keyPattern?.email || error?.keyValue?.email);
+}
+
 function serializeUser(user) {
   const obj = user.toObject ? user.toObject() : user;
   delete obj.password;
@@ -14,30 +24,39 @@ export const register = asyncHandler(async (req, res) => {
   const email = String(req.body.email || "").toLowerCase().trim();
   const password = String(req.body.password || "");
 
-  if (!firstname || !email || password.length < 8) {
-    const error = new Error("Prenom, email et mot de passe de 8 caracteres minimum requis");
-    error.statusCode = 400;
+  if (!firstname) throw authError("Le prenom est requis");
+  if (!email) throw authError("L'email est requis");
+  if (password.length < 8) throw authError("Le mot de passe doit contenir au moins 8 caracteres");
+
+  try {
+    const user = await User.create({
+      ...req.body,
+      firstname,
+      lastname,
+      email,
+      password
+    });
+    res.status(201).json({ user: serializeUser(user), token: signToken(user._id) });
+  } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      throw authError("Un compte existe deja avec cet email", 409);
+    }
     throw error;
   }
-
-  const user = await User.create({
-    ...req.body,
-    firstname,
-    lastname,
-    email,
-    password
-  });
-  res.status(201).json({ user: serializeUser(user), token: signToken(user._id) });
 });
 
 export const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email: String(email).toLowerCase() }).select("+password");
+  const email = String(req.body.email || "").toLowerCase().trim();
+  const password = String(req.body.password || "");
+
+  if (!email || !password) {
+    throw authError("Email et mot de passe requis");
+  }
+
+  const user = await User.findOne({ email }).select("+password");
 
   if (!user || !(await user.comparePassword(password))) {
-    const error = new Error("Invalid credentials");
-    error.statusCode = 401;
-    throw error;
+    throw authError("Email ou mot de passe incorrect", 401);
   }
 
   res.json({ user: serializeUser(user), token: signToken(user._id) });

@@ -1,6 +1,31 @@
-# Import de Recettes
+# Import et Synchronisation de Recettes
 
-## Flux Spoonacular
+## Principe RC1+
+
+Spoonacular n'est plus interroge pendant les recherches utilisateur. Les recherches et suggestions lisent uniquement MongoDB.
+
+Spoonacular sert de source d'alimentation du catalogue Mealzy via une synchronisation explicite.
+
+## Synchronisation Spoonacular
+
+La commande suivante alimente le catalogue :
+
+```bash
+corepack yarn workspace @mealizy/api sync:spoonacular --query pasta --limit 24
+```
+
+Le service `spoonacularSyncService.js` :
+
+- recherche des recettes sur Spoonacular ;
+- enrichit les ingredients avec `ingredientMatcher.js` ;
+- insere les nouvelles recettes ;
+- met a jour les recettes Spoonacular deja connues ;
+- ignore les doublons presents dans un meme lot ;
+- retourne un rapport avec recettes analysees, nouvelles, mises a jour, doublons, ingredients et quota restant si disponible.
+
+L'operation est idempotente grace a l'identifiant `{ sourceProvider: "spoonacular", externalId }`.
+
+## Import ponctuel
 
 1. Le frontend appelle `POST /api/recipes/import/spoonacular/:id`.
 2. `recipeController.importFromSpoonacular` delegue a `recipeService.importSpoonacularRecipe`.
@@ -23,9 +48,18 @@ L'index unique partiel `{ sourceProvider, externalId }` evite les doublons Spoon
 
 L'import final remplace les ingredients bruts par des ingredients enrichis : `ingredientId`, `ingredientName`, `originalName`, `displayName`, `normalizedName`, `amount`, `standardAmount`, `standardUnit`, `sourceMetadata`.
 
-## Gestion des erreurs
+Ce flux reste disponible cote API, mais la recherche utilisateur ne l'utilise plus.
 
-`SpoonacularApiError` encapsule les erreurs reseau, quota, cle invalide, mauvais format et indisponibilite externe. Quand la recherche catalogue Spoonacular echoue, l'API retourne un catalogue Mealizy avec un bloc `fallback` explicite.
+## Gestion des erreurs et quota
+
+`SpoonacularApiError` encapsule les erreurs reseau, quota, cle invalide, mauvais format et indisponibilite externe. Ces erreurs sont traitees par la synchronisation et ne sont pas exposees directement au frontend utilisateur.
+
+La synchronisation journalise les situations suivantes sans exposer la cle :
+
+- quota depasse ;
+- cle invalide ;
+- indisponibilite temporaire ;
+- erreur reseau.
 
 ## Tests RC1
 
@@ -35,5 +69,6 @@ Les tests couvrent :
 - absence de cle API ;
 - classification d'une erreur de quota ;
 - normalisation et creation d'ingredients inconnus ;
-- prevention des doublons via l'upsert de recette.
-
+- prevention des doublons via l'upsert de recette ;
+- recherche utilisateur MongoDB-only ;
+- synchronisation Spoonacular idempotente.
