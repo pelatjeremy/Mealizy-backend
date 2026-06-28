@@ -1,4 +1,4 @@
-import type { InventoryItem, MealPlan, MealPlanDay, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, ShoppingList, UserProfile } from "@/types/domain";
+import type { InventoryItem, MealPlan, MealPlanDay, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, RecipeCompatibility, ShoppingList, UserProfile } from "@/types/domain";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -100,6 +100,13 @@ export async function updateRecipe(token: string, id: string, payload: {
   });
 }
 
+export async function importSpoonacularRecipe(token: string, id: string) {
+  return request<Recipe>(`/recipes/import/spoonacular/${encodeURIComponent(id)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
 export function readCatalogSource(source: string): RecipeCatalogSource {
   return source === "mine" || source === "mealizy" || source === "api" ? source : "all";
 }
@@ -108,6 +115,13 @@ export async function getRecipe(id: string, source?: Recipe["source"], token?: s
   const params = source ? `?source=${encodeURIComponent(source)}` : "";
   return request<Recipe>(`/recipes/${encodeURIComponent(id)}${params}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined
+  });
+}
+
+export async function getRecipeCompatibility(token: string, id: string, source?: Recipe["source"]) {
+  const params = source ? `?source=${encodeURIComponent(source)}` : "";
+  return request<RecipeCompatibility>(`/recipes/${encodeURIComponent(id)}/compatibility${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
   });
 }
 

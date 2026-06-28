@@ -1,21 +1,39 @@
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
 export type RecipeIngredient = {
+  ingredientId?: string;
   ingredientName: string;
+  originalName?: string;
+  displayName?: string;
   normalizedName: string;
   quantity: number;
+  amount?: number;
   unit: string;
+  originalUnit?: string;
+  standardAmount?: number;
+  standardUnit?: string;
   category: string;
+  aisle?: string;
+  image?: string;
+  sourceMetadata?: Record<string, unknown>;
 };
 
 export type Recipe = {
   _id?: string;
   id?: string;
   source?: "api" | "user" | "demo";
+  sourceProvider?: "spoonacular" | "mealizy" | "user" | "demo";
   externalId?: string;
+  isImported?: boolean;
+  importedRecipeId?: string;
+  mealizyRecipeId?: string;
   title: string;
   image?: string;
+  summary?: string;
+  description?: string;
   preparationTime: number;
+  cookingTime?: number;
+  readyInMinutes?: number;
   servings: number;
   score?: number;
   coverage?: number;
@@ -27,12 +45,20 @@ export type Recipe = {
     protein: number;
     carbs: number;
     fat: number;
+    fiber?: number;
+    sugar?: number;
+    sodium?: number;
+    nutrients?: Array<{ name?: string; amount?: number; unit?: string; percentOfDailyNeeds?: number }>;
   };
   ingredients: RecipeIngredient[];
   instructions?: string[];
   requiredEquipments?: string[];
   categories?: string[];
   diets?: string[];
+  cuisines?: string[];
+  tags?: string[];
+  importedAt?: string;
+  updatedAt?: string;
 };
 
 export type RecipeCatalogSource = "mine" | "mealizy" | "api" | "all";
@@ -50,6 +76,32 @@ export type RecipeCatalogResponse = {
     spoonacularStatus: number | null;
     message: string;
   };
+};
+
+export type RecipeCompatibilityIngredient = {
+  ingredientId?: string;
+  ingredientName: string;
+  normalizedName: string;
+  requiredQuantity: number;
+  requiredUnit: string;
+  unit: string;
+  status: "disponible" | "partiel" | "manquant";
+  matchType?: "ingredientId" | "normalizedName" | null;
+  quantityComparable?: boolean;
+  availableQuantity?: number;
+  missingQuantity?: number;
+};
+
+export type RecipeCompatibility = {
+  recipeId: string;
+  totalIngredients: number;
+  availableIngredients: number;
+  missingIngredients: number;
+  partialIngredients: number;
+  compatibilityScore: number;
+  matched: RecipeCompatibilityIngredient[];
+  missing: RecipeCompatibilityIngredient[];
+  partial: RecipeCompatibilityIngredient[];
 };
 
 export type InventoryItem = {

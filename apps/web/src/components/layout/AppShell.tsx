@@ -22,7 +22,7 @@ import type { UserProfile } from "@/types/domain";
 const privateNav = [
   { href: "/dashboard", label: "Tableau de bord", icon: Home },
   { href: "/inventory", label: "Inventaire", icon: Package },
-  { href: "/recipes", label: "Recettes", icon: BookOpen },
+  { href: "/recipes", label: "Bibliotheque", icon: BookOpen },
   { href: "/recipes/suggestions", label: "Suggestions", icon: ClipboardCheck },
   { href: "/meal-plans", label: "Planning repas", icon: CalendarDays },
   { href: "/shopping-list", label: "Liste de courses", icon: ShoppingCart },

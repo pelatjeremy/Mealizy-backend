@@ -1,6 +1,7 @@
 import asyncHandler from "express-async-handler";
 import { InventoryItem } from "../models/InventoryItem.js";
 import { findOrCreateIngredient } from "../services/ingredientService.js";
+import { normalizeUnit } from "../utils/unitConversion.js";
 
 async function backfillNormalizedNames(items) {
   await Promise.all(items.map(async (item) => {
@@ -23,7 +24,7 @@ export const createInventoryItem = asyncHandler(async (req, res) => {
     ingredientId: ingredient._id,
     normalizedName: ingredient.normalizedName,
     quantity: req.body.quantity,
-    unit: req.body.unit,
+    unit: normalizeUnit(req.body.unit),
     expirationDate: req.body.expirationDate
   });
   res.status(201).json(await item.populate("ingredientId"));
@@ -31,6 +32,7 @@ export const createInventoryItem = asyncHandler(async (req, res) => {
 
 export const updateInventoryItem = asyncHandler(async (req, res) => {
   const update = { ...req.body };
+  if (update.unit) update.unit = normalizeUnit(update.unit);
   if (req.body.name) {
     const ingredient = await findOrCreateIngredient({ name: req.body.name, category: req.body.category });
     update.ingredientId = ingredient._id;

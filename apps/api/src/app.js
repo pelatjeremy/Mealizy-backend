@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { env } from "./config/env.js";
 import { errorHandler, notFound } from "./middlewares/errorMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
+import catalogRoutes from "./routes/catalogRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
 import mealPlanRoutes from "./routes/mealPlanRoutes.js";
 import recipeRoutes from "./routes/recipeRoutes.js";
@@ -45,6 +46,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/catalog", catalogRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/recipes", recipeRoutes);

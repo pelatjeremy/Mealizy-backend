@@ -5,11 +5,13 @@ import { normalizeUnit } from "../utils/unitConversion.js";
 import {
   getRecipeById,
   getRecipeSuggestions,
+  importSpoonacularRecipe,
   listRecipes,
+  searchRecipeLibrary,
   searchRecipesLegacy,
-  searchSpoonacularRecipes,
   SpoonacularApiError
 } from "../services/recipeService.js";
+import { getRecipeCompatibilityForUser } from "../services/recipeInventoryMatcher.js";
 
 function badRequest(message) {
   const error = new Error(message);
@@ -60,7 +62,15 @@ function normalizeRecipePayload(body) {
       ? body.instructions.map((instruction) => String(instruction).trim()).filter(Boolean)
       : [],
     nutrition: body.nutrition || {},
-    categories: Array.isArray(body.categories) ? body.categories : []
+    categories: Array.isArray(body.categories) ? body.categories : [],
+    summary: String(body.summary || "").trim(),
+    description: String(body.description || "").trim(),
+    cookingTime: Number(body.cookingTime || 0),
+    readyInMinutes: Number(body.readyInMinutes || body.preparationTime || 20),
+    requiredEquipments: Array.isArray(body.requiredEquipments) ? body.requiredEquipments : [],
+    diets: Array.isArray(body.diets) ? body.diets : [],
+    cuisines: Array.isArray(body.cuisines) ? body.cuisines : [],
+    tags: Array.isArray(body.tags) ? body.tags : []
   };
 }
 
@@ -70,9 +80,18 @@ export const searchRecipes = asyncHandler(async (req, res) => {
 
 export const recipeCatalog = asyncHandler(async (req, res) => {
   const source = req.query.source || "all";
-  if (source === "api") {
+  if (source === "api" || source === "all") {
     try {
-      res.json(await searchSpoonacularRecipes({ q: req.query.q, page: req.query.page, limit: req.query.limit, filters: req.query }));
+      res.json(
+        await searchRecipeLibrary({
+          q: req.query.q,
+          page: req.query.page,
+          limit: req.query.limit,
+          source,
+          user: req.user,
+          filters: req.query
+        })
+      );
     } catch (error) {
       if (!(error instanceof SpoonacularApiError)) throw error;
 
@@ -111,6 +130,10 @@ export const recipeCatalog = asyncHandler(async (req, res) => {
   );
 });
 
+export const importFromSpoonacular = asyncHandler(async (req, res) => {
+  res.status(201).json(await importSpoonacularRecipe(req.params.id, req.user));
+});
+
 export const suggestions = asyncHandler(async (req, res) => {
   res.json(await getRecipeSuggestions(req.user, req.query));
 });
@@ -123,6 +146,13 @@ export const recipeDetail = asyncHandler(async (req, res) => {
   }
 
   res.json(recipe);
+});
+
+export const recipeCompatibility = asyncHandler(async (req, res) => {
+  const recipe = await getRecipeById(req.params.id, req.query.source);
+  if (!recipe) throw notFound("Recipe not found");
+
+  res.json(await getRecipeCompatibilityForUser(req.user._id, recipe));
 });
 
 export const createCustomRecipe = asyncHandler(async (req, res) => {

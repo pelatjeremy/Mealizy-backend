@@ -1,20 +1,21 @@
 const irregulars = new Map([
   ["oeufs", "oeuf"],
-  ["œufs", "oeuf"],
+  ["\u0153ufs", "oeuf"],
   ["eggs", "egg"]
 ]);
 
 export function normalizeIngredient(value = "") {
   const cleaned = String(value)
-    .replace(/œ/g, "oe")
-    .replace(/Œ/g, "oe")
+    .replace(/\u0153/g, "oe")
+    .replace(/\u0152/g, "oe")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
-    .replace(/['’]/g, " ")
+    .replace(/['\u2019]/g, " ")
     .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .trim();
 
   return cleaned
     .split(" ")

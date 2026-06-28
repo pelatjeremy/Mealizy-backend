@@ -1,25 +1,21 @@
 import mongoose from "mongoose";
-import { env } from "../config/env.js";
 import { demoRecipes } from "../data/demoRecipes.js";
 import { InventoryItem } from "../models/InventoryItem.js";
 import { Recipe } from "../models/Recipe.js";
 import { User } from "../models/User.js";
+import {
+  fetchSpoonacularRecipeById,
+  searchSpoonacularRecipes,
+  SpoonacularApiError
+} from "./spoonacularService.js";
+import { normalizeRecipeIngredient } from "./ingredientMatcher.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { addQuantities, normalizeUnit, subtractQuantities } from "../utils/unitConversion.js";
 
 const demoEmail = "demo@mealizy.app";
 const coverageFilters = { 90: 90, 75: 75, 50: 50, 25: 25 };
 
-export class SpoonacularApiError extends Error {
-  constructor(message, { statusCode = 502, spoonacularStatus = null, reason = "unknown", responseMessage = "" } = {}) {
-    super(message);
-    this.name = "SpoonacularApiError";
-    this.statusCode = statusCode;
-    this.spoonacularStatus = spoonacularStatus;
-    this.reason = reason;
-    this.responseMessage = responseMessage;
-  }
-}
+export { SpoonacularApiError };
 
 function clampPage(value) {
   const page = Number(value || 1);
@@ -123,215 +119,108 @@ export async function searchRecipesLegacy({ q }) {
   return catalog.items;
 }
 
-function readNutrient(nutrients = [], names) {
-  const nutrient = nutrients.find((item) => names.includes(String(item.name).toLowerCase()));
-  return nutrient ? Math.round(Number(nutrient.amount || 0)) : 0;
+function importedRecipeQuery(externalId) {
+  return { sourceProvider: "spoonacular", externalId: String(externalId) };
 }
 
-async function readSpoonacularPayload(response) {
-  const text = await response.text();
-  if (!text) return null;
+function withImportStatus(recipe, importedByExternalId) {
+  const externalId = recipe.externalId ? String(recipe.externalId) : "";
+  const imported = externalId ? importedByExternalId.get(externalId) : null;
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
+  if (imported) {
+    return {
+      ...recipe,
+      isImported: true,
+      importedRecipeId: String(imported._id),
+      mealizyRecipeId: String(imported._id)
+    };
   }
-}
-
-function classifySpoonacularError(status, payload) {
-  const message = typeof payload === "string" ? payload : payload?.message || payload?.error || "";
-  const lowerMessage = String(message).toLowerCase();
-
-  if (status === 401 || status === 403 || lowerMessage.includes("api key")) return "invalid_key";
-  if (status === 402 || status === 429 || lowerMessage.includes("quota") || lowerMessage.includes("limit")) return "quota_exceeded";
-  if (status >= 400 && status < 500) return "bad_request";
-  if (status >= 500) return "spoonacular_unavailable";
-  return "unknown";
-}
-
-function assertSpoonacularShape(payload, expectedShape) {
-  if (payload === false) {
-    throw new SpoonacularApiError("Spoonacular returned false", {
-      reason: "unexpected_format",
-      responseMessage: "false"
-    });
-  }
-
-  if (expectedShape === "catalog" && (!payload || !Array.isArray(payload.results))) {
-    throw new SpoonacularApiError("Spoonacular returned an unexpected catalog format", {
-      reason: "unexpected_format",
-      responseMessage: typeof payload
-    });
-  }
-
-  if (expectedShape === "bulk" && !Array.isArray(payload)) {
-    throw new SpoonacularApiError("Spoonacular returned an unexpected bulk format", {
-      reason: "unexpected_format",
-      responseMessage: typeof payload
-    });
-  }
-
-  if (expectedShape === "detail" && (!payload || typeof payload !== "object" || !payload.id)) {
-    throw new SpoonacularApiError("Spoonacular returned an unexpected recipe format", {
-      reason: "unexpected_format",
-      responseMessage: typeof payload
-    });
-  }
-}
-
-async function fetchSpoonacularJson(url, expectedShape) {
-  let response;
-
-  try {
-    response = await fetch(url);
-  } catch (error) {
-    throw new SpoonacularApiError("Spoonacular network error", {
-      reason: "network_error",
-      responseMessage: error instanceof Error ? error.message : ""
-    });
-  }
-
-  const payload = await readSpoonacularPayload(response);
-  if (!response.ok) {
-    const reason = classifySpoonacularError(response.status, payload);
-    const message = typeof payload === "string" ? payload : payload?.message || payload?.error || response.statusText;
-    throw new SpoonacularApiError("Spoonacular request failed", {
-      spoonacularStatus: response.status,
-      reason,
-      responseMessage: String(message || "")
-    });
-  }
-
-  assertSpoonacularShape(payload, expectedShape);
-  return payload;
-}
-
-function mapSpoonacularRecipe(recipe) {
-  const ingredients = (recipe.extendedIngredients || recipe.missedIngredients || recipe.usedIngredients || []).map((ingredient) => ({
-    ingredientName: ingredient.nameClean || ingredient.name || ingredient.originalName || ingredient.original,
-    normalizedName: normalizeIngredientName(ingredient.nameClean || ingredient.name || ingredient.originalName || ingredient.original),
-    quantity: Number(ingredient.amount || 0),
-    unit: normalizeUnit(ingredient.unit || ""),
-    category: "autres"
-  }));
-
-  const nutrients = recipe.nutrition?.nutrients || [];
-  const analyzedInstructions = recipe.analyzedInstructions?.flatMap((block) => block.steps || []) || [];
-  const instructions = analyzedInstructions.map((step) => step.step).filter(Boolean);
 
   return {
-    source: "api",
-    externalId: String(recipe.id),
-    id: String(recipe.id),
-    title: recipe.title,
-    image: recipe.image,
-    ingredients,
-    preparationTime: recipe.readyInMinutes || 20,
-    servings: recipe.servings || 1,
-    instructions,
-    categories: recipe.dishTypes || [],
-    diets: recipe.diets || [],
-    requiredEquipments: [],
-    nutrition: {
-      calories: readNutrient(nutrients, ["calories"]),
-      protein: readNutrient(nutrients, ["protein"]),
-      carbs: readNutrient(nutrients, ["carbohydrates"]),
-      fat: readNutrient(nutrients, ["fat"])
-    }
+    ...recipe,
+    isImported: Boolean(recipe._id),
+    importedRecipeId: recipe._id ? String(recipe._id) : undefined,
+    mealizyRecipeId: recipe._id ? String(recipe._id) : undefined
   };
 }
 
-function applySpoonacularFilters(url, filters = {}) {
-  if (filters.q) url.searchParams.set("query", filters.q);
-  if (filters.maxCalories) url.searchParams.set("maxCalories", filters.maxCalories);
-  if (filters.minProtein) url.searchParams.set("minProtein", filters.minProtein);
-  if (filters.maxCarbs) url.searchParams.set("maxCarbs", filters.maxCarbs);
-  if (filters.maxFat) url.searchParams.set("maxFat", filters.maxFat);
-  if (filters.maxTime) url.searchParams.set("maxReadyTime", filters.maxTime);
+async function readImportedSpoonacularMap(recipes) {
+  const externalIds = [...new Set(recipes.map((recipe) => recipe.externalId).filter(Boolean).map(String))];
+  if (!externalIds.length) return new Map();
 
-  const categories = splitFilter(filters.category);
-  if (categories.length) url.searchParams.set("type", categories[0]);
+  const importedRecipes = await Recipe.find({ sourceProvider: "spoonacular", externalId: { $in: externalIds } }).lean();
+  return importedRecipes.reduce((map, recipe) => map.set(String(recipe.externalId), recipe), new Map());
 }
 
-export async function fetchSpoonacularRecipeById(recipeId) {
-  if (!env.spoonacularApiKey) return null;
-
-  const url = new URL(`https://api.spoonacular.com/recipes/${recipeId}/information`);
-  url.searchParams.set("apiKey", env.spoonacularApiKey);
-  url.searchParams.set("includeNutrition", "true");
-
-  try {
-    return mapSpoonacularRecipe(await fetchSpoonacularJson(url, "detail"));
-  } catch {
-    return null;
-  }
-}
-
-async function fetchSpoonacularRecipesByIds(recipeIds) {
-  if (!env.spoonacularApiKey || !recipeIds.length) return [];
-
-  const url = new URL("https://api.spoonacular.com/recipes/informationBulk");
-  url.searchParams.set("apiKey", env.spoonacularApiKey);
-  url.searchParams.set("ids", recipeIds.join(","));
-  url.searchParams.set("includeNutrition", "true");
-
-  try {
-    return (await fetchSpoonacularJson(url, "bulk")).map(mapSpoonacularRecipe);
-  } catch {
-    return [];
-  }
-}
-
-export async function searchSpoonacularRecipes({ q, page, limit, filters = {}, inventoryMap } = {}) {
-  if (!env.spoonacularApiKey) return { items: [], total: 0, page: clampPage(page), limit: clampLimit(limit), source: "api" };
-
+export async function searchRecipeLibrary({ q, page, limit, source = "all", user, filters = {} }) {
   const currentPage = clampPage(page);
   const currentLimit = clampLimit(limit);
-  const url = new URL("https://api.spoonacular.com/recipes/complexSearch");
-  url.searchParams.set("apiKey", env.spoonacularApiKey);
-  url.searchParams.set("number", String(currentLimit));
-  url.searchParams.set("offset", String((currentPage - 1) * currentLimit));
-  url.searchParams.set("addRecipeInformation", "true");
-  url.searchParams.set("addRecipeNutrition", "true");
-  url.searchParams.set("fillIngredients", "true");
-  applySpoonacularFilters(url, { ...filters, q });
+  const storedCatalog = await listRecipes({ q, page: currentPage, limit: currentLimit, source: source === "api" ? "all" : source, user, filters });
 
-  const includeIngredients = inventoryMap ? [...inventoryMap.keys()].slice(0, 20).join(",") : "";
-  if (includeIngredients) url.searchParams.set("includeIngredients", includeIngredients);
+  if (source !== "api" && source !== "all") return storedCatalog;
 
-  const payload = await fetchSpoonacularJson(url, "catalog");
-  const summaryItems = payload.results || [];
-  const enrichedItems = await fetchSpoonacularRecipesByIds(summaryItems.map((recipe) => recipe.id).filter(Boolean));
-  const items = enrichedItems.length === summaryItems.length ? enrichedItems : summaryItems.map(mapSpoonacularRecipe);
-
-  if (items.length) {
-    const operations = items
-      .filter((recipe) => recipe.externalId && recipe.title && recipe.image)
-      .map((recipe) => ({
-        updateOne: {
-          filter: { source: "api", externalId: recipe.externalId },
-          update: { $set: recipe },
-          upsert: true
-        }
-      }));
-
-    if (operations.length) await Recipe.bulkWrite(operations);
-  }
+  const apiCatalog = await searchSpoonacularRecipes({ q, page: currentPage, limit: currentLimit, filters });
+  const importedMap = await readImportedSpoonacularMap(apiCatalog.items);
+  const storedExternalIds = new Set(storedCatalog.items.map((recipe) => recipe.externalId).filter(Boolean).map(String));
+  const externalItems = apiCatalog.items
+    .map((recipe) => withImportStatus(recipe, importedMap))
+    .filter((recipe) => !storedExternalIds.has(String(recipe.externalId || "")));
 
   return {
-    items,
-    total: payload.totalResults || 0,
+    items: [...storedCatalog.items.map((recipe) => withImportStatus(recipe, importedMap)), ...externalItems].slice(0, currentLimit),
+    total: Math.max(storedCatalog.total, storedCatalog.items.length) + apiCatalog.total,
     page: currentPage,
     limit: currentLimit,
-    source: "api"
+    source
   };
+}
+
+export async function importSpoonacularRecipe(recipeId, user) {
+  const externalId = String(recipeId || "").trim();
+  if (!externalId) {
+    const error = new Error("Recipe id is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const importedRecipe = await fetchSpoonacularRecipeById(externalId);
+  if (!importedRecipe) {
+    const error = new Error("Recipe not found on Spoonacular");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const normalizedIngredients = await Promise.all(
+    (importedRecipe.ingredients || []).map((ingredient) => normalizeRecipeIngredient(ingredient))
+  );
+
+  const recipe = await Recipe.findOneAndUpdate(
+    importedRecipeQuery(externalId),
+    {
+      $set: {
+        ...importedRecipe,
+        source: "api",
+        sourceProvider: "spoonacular",
+        externalId,
+        ingredients: normalizedIngredients,
+        importedBy: user?._id,
+        updatedAt: new Date()
+      },
+      $setOnInsert: {
+        importedAt: new Date()
+      }
+    },
+    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+  ).lean();
+
+  return withImportStatus(recipe, new Map([[externalId, recipe]]));
 }
 
 export async function getRecipeById(recipeId, source) {
   if (source === "api") {
     const cachedRecipe = await Recipe.findOne({ ...recipeIdQuery(recipeId), source: "api" }).lean();
-    return cachedRecipe || fetchSpoonacularRecipeById(recipeId);
+    if (cachedRecipe) return cachedRecipe;
+    return fetchSpoonacularRecipeById(recipeId).catch(() => null);
   }
 
   const storedRecipe = await Recipe.findOne(recipeIdQuery(recipeId)).lean();

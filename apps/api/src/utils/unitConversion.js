@@ -1,77 +1,36 @@
-const unitAliases = new Map([
-  ["", "unit"],
-  ["unit", "unit"],
-  ["unite", "unit"],
-  ["unitee", "unit"],
-  ["unités", "unit"],
-  ["unité", "unit"],
-  ["piece", "unit"],
-  ["pieces", "unit"],
-  ["serving", "unit"],
-  ["servings", "unit"],
-  ["g", "g"],
-  ["gram", "g"],
-  ["grams", "g"],
-  ["gramme", "g"],
-  ["grammes", "g"],
-  ["kg", "kg"],
-  ["kilogram", "kg"],
-  ["kilograms", "kg"],
-  ["kilogramme", "kg"],
-  ["kilogrammes", "kg"],
-  ["ml", "ml"],
-  ["milliliter", "ml"],
-  ["milliliters", "ml"],
-  ["millilitre", "ml"],
-  ["millilitres", "ml"],
-  ["l", "l"],
-  ["liter", "l"],
-  ["liters", "l"],
-  ["litre", "l"],
-  ["litres", "l"],
-  ["tranche", "slice"],
-  ["tranches", "slice"],
-  ["slice", "slice"],
-  ["slices", "slice"],
-  ["boite", "can"],
-  ["boites", "can"],
-  ["can", "can"],
-  ["cans", "can"],
-  ["pot", "jar"],
-  ["pots", "jar"],
-  ["jar", "jar"],
-  ["jars", "jar"],
-  ["cuillere a soupe", "tbsp"],
-  ["tablespoon", "tbsp"],
-  ["tablespoons", "tbsp"],
-  ["tbsp", "tbsp"],
-  ["cuillere a cafe", "tsp"],
-  ["teaspoon", "tsp"],
-  ["teaspoons", "tsp"],
-  ["tsp", "tsp"]
-]);
+import { ingredientUnits } from "../data/catalogUnits.js";
 
-const unitFamilies = {
-  weight: { g: 1, kg: 1000 },
-  volume: { ml: 1, l: 1000, tbsp: 14.7868, tsp: 4.92892 },
-  count: { unit: 1, slice: 1, can: 1, jar: 1 }
-};
-
-export function normalizeUnit(unit = "") {
-  const normalized = String(unit)
+function normalizeUnitToken(unit = "") {
+  return String(unit)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ");
+}
 
+const unitAliases = ingredientUnits.reduce((map, unit) => {
+  map.set(normalizeUnitToken(unit.id), unit.id);
+  map.set(normalizeUnitToken(unit.abbreviation), unit.id);
+  for (const alias of unit.aliases || []) map.set(normalizeUnitToken(alias), unit.id);
+  return map;
+}, new Map());
+
+const conversionFamilies = ingredientUnits.reduce((families, unit) => {
+  if (!unit.baseUnit || !unit.conversionFactor) return families;
+  families[unit.baseUnit] = { ...(families[unit.baseUnit] || {}), [unit.id]: unit.conversionFactor };
+  return families;
+}, {});
+
+export function normalizeUnit(unit = "") {
+  const normalized = normalizeUnitToken(unit);
   return unitAliases.get(normalized) || normalized || "unit";
 }
 
 function getFamily(unit) {
   const normalizedUnit = normalizeUnit(unit);
-  return Object.entries(unitFamilies).find(([, units]) => units[normalizedUnit]);
+  return Object.entries(conversionFamilies).find(([, units]) => units[normalizedUnit]);
 }
 
 export function addQuantities(currentQuantity, currentUnit, addedQuantity, addedUnit) {
@@ -105,3 +64,4 @@ export function subtractQuantities(required, requiredUnit, available, availableU
 
   return Math.round((missingBase / requiredFamily[1][normalizedRequiredUnit]) * 100) / 100;
 }
+

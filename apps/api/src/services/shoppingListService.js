@@ -1,3 +1,4 @@
+import { ingredientUnits } from "../data/catalogUnits.js";
 import { InventoryItem } from "../models/InventoryItem.js";
 import { MealPlan } from "../models/MealPlan.js";
 import { ShoppingList } from "../models/ShoppingList.js";
@@ -7,11 +8,14 @@ import { findOrCreateIngredient } from "./ingredientService.js";
 import { normalizeWeekStartDate } from "./mealPlanService.js";
 import { getRecipeById } from "./recipeService.js";
 
-const unitFamilies = {
-  weight: { baseUnit: "g", factors: { g: 1, kg: 1000 } },
-  volume: { baseUnit: "ml", factors: { ml: 1, l: 1000, tbsp: 14.7868, tsp: 4.92892 } },
-  count: { baseUnit: null, factors: { unit: 1, slice: 1, can: 1, jar: 1 } }
-};
+const unitFamilies = ingredientUnits.reduce((families, unit) => {
+  if (!unit.conversionFactor) return families;
+  const familyKey = unit.baseUnit || unit.family;
+  const current = families[familyKey] || { baseUnit: unit.baseUnit, factors: {} };
+  current.factors[unit.id] = unit.conversionFactor;
+  families[familyKey] = current;
+  return families;
+}, {});
 
 function notFound(message) {
   const error = new Error(message);
