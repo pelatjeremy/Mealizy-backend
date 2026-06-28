@@ -168,6 +168,8 @@ export type MealPlanRecipe = {
 export type MealPlan = {
   _id: string;
   userId: string;
+  date: string;
+  mealDate?: string;
   weekStartDate: string;
   day: MealPlanDay;
   mealType: MealType;

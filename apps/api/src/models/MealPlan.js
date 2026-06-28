@@ -7,6 +7,7 @@ export const recipeSources = ["api", "user", "demo"];
 const mealPlanSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    mealDate: { type: Date, index: true },
     weekStartDate: { type: Date, required: true, index: true },
     day: { type: String, enum: mealPlanDays, required: true },
     mealType: {
@@ -23,5 +24,9 @@ const mealPlanSchema = new mongoose.Schema(
 );
 
 mealPlanSchema.index({ userId: 1, weekStartDate: 1, day: 1, mealType: 1 }, { unique: true });
+mealPlanSchema.index(
+  { userId: 1, mealDate: 1, mealType: 1 },
+  { unique: true, partialFilterExpression: { mealDate: { $type: "date" } } }
+);
 
 export const MealPlan = mongoose.model("MealPlan", mealPlanSchema);

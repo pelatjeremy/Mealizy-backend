@@ -1,4 +1,4 @@
-import type { InventoryItem, MealPlan, MealPlanDay, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, RecipeCompatibility, ShoppingList, UserProfile } from "@/types/domain";
+import type { InventoryItem, MealPlan, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, RecipeCompatibility, ShoppingList, UserProfile } from "@/types/domain";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
@@ -169,8 +169,7 @@ export async function getMealPlans(token: string, week: string) {
 export async function createMealPlan(
   token: string,
   payload: {
-    weekStartDate: string;
-    day: MealPlanDay;
+    date: string;
     mealType: MealType;
     recipeId: string;
     recipeSource: "api" | "user" | "demo";

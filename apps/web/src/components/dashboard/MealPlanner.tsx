@@ -5,10 +5,8 @@ import { Apple, BookOpen, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffe
 import { useRouter } from "next/navigation";
 import { deleteMealPlan, getMealPlans, getProfile, readAuthToken, updateMealPlan } from "@/lib/api";
 import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
-import type { MealPlan, MealPlanDay, MealType, UserProfile } from "@/types/domain";
+import type { MealPlan, MealType, UserProfile } from "@/types/domain";
 
-const dayKeys: MealPlanDay[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-const dayLabels = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const mealRows: { key: MealType; label: string; icon: typeof Coffee }[] = [
   { key: "breakfast", label: "Petit-dejeuner", icon: Coffee },
   { key: "lunch", label: "Dejeuner", icon: Sun },
@@ -33,8 +31,19 @@ function formatWeekRange(weekStart: Date) {
   })}`;
 }
 
-function planKey(day: MealPlanDay, mealType: MealType) {
-  return `${day}:${mealType}`;
+function weekDates(weekStart: Date) {
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + index);
+    return {
+      key: formatWeekParam(date),
+      label: date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric" })
+    };
+  });
+}
+
+function planKey(date: string, mealType: MealType) {
+  return `${date}:${mealType}`;
 }
 
 function MealSlot({
@@ -91,6 +100,7 @@ export function MealPlanner() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
   const week = formatWeekParam(weekStart);
+  const dates = useMemo(() => weekDates(weekStart), [weekStart]);
 
   const visibleMeals = useMemo(() => {
     const enabled = profile?.enabledMealTypes?.length ? profile.enabledMealTypes : mealRows.map((meal) => meal.key);
@@ -99,7 +109,7 @@ export function MealPlanner() {
 
   const planMap = useMemo(() => {
     return plans.reduce<Record<string, MealPlan>>((map, plan) => {
-      map[planKey(plan.day, plan.mealType)] = plan;
+      map[planKey(plan.date, plan.mealType)] = plan;
       return map;
     }, {});
   }, [plans]);
@@ -197,17 +207,17 @@ export function MealPlanner() {
           {plans.length === 0 && <div className="state-panel">Aucun repas planifie pour cette semaine.</div>}
           <div className="meal-grid full-meal-grid">
             <div className="grid-spacer" />
-            {dayLabels.map((day) => <strong className="day-label" key={day}>{day}</strong>)}
+            {dates.map((date) => <strong className="day-label" key={date.key}>{date.label}</strong>)}
             {visibleMeals.map((meal) => (
               <Fragment key={meal.key}>
                 <div className="meal-label">
                   <meal.icon size={22} />
                   <span>{meal.label}</span>
                 </div>
-                {dayKeys.map((day) => (
+                {dates.map((date) => (
                   <MealSlot
-                    key={planKey(day, meal.key)}
-                    plan={planMap[planKey(day, meal.key)]}
+                    key={planKey(date.key, meal.key)}
+                    plan={planMap[planKey(date.key, meal.key)]}
                     openMenuId={openMenuId}
                     onToggleMenu={handleToggleMenu}
                     onCook={handleCook}

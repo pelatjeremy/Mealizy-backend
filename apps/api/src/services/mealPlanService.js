@@ -15,15 +15,48 @@ function notFound(message) {
 
 export function normalizeWeekStartDate(value) {
   if (!value) throw badRequest("weekStartDate is required");
+  return normalizeDateOnly(value, "weekStartDate");
+}
+
+export function normalizeDateOnly(value, fieldName = "date") {
+  if (!value) throw badRequest(`${fieldName} is required`);
 
   const date = new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) throw badRequest("weekStartDate must be a valid YYYY-MM-DD date");
+  if (Number.isNaN(date.getTime())) throw badRequest(`${fieldName} must be a valid YYYY-MM-DD date`);
 
   return date;
 }
 
-function validateSlot({ day, mealType }) {
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function weekStartFromDate(date) {
+  const weekStart = new Date(date);
+  const day = weekStart.getUTCDay() || 7;
+  weekStart.setUTCDate(weekStart.getUTCDate() - day + 1);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  return weekStart;
+}
+
+function dayFromDate(date) {
+  return mealPlanDays[(date.getUTCDay() || 7) - 1];
+}
+
+function dateFromLegacySlot(weekStartDate, day) {
   if (!mealPlanDays.includes(day)) throw badRequest("day is invalid");
+  const date = new Date(weekStartDate);
+  date.setUTCDate(date.getUTCDate() + mealPlanDays.indexOf(day));
+  return date;
+}
+
+function readMealDate(payload) {
+  if (payload.date || payload.mealDate) return normalizeDateOnly(payload.date || payload.mealDate, "date");
+  const weekStartDate = normalizeWeekStartDate(payload.weekStartDate);
+  return dateFromLegacySlot(weekStartDate, payload.day);
+}
+
+function validateSlot({ mealType }) {
   if (!mealTypes.includes(mealType)) throw badRequest("mealType is invalid");
 }
 
@@ -67,10 +100,19 @@ function buildRecipeSnapshot(recipe) {
 
 function serializeMealPlan(plan, recipe) {
   const obj = plan.toObject ? plan.toObject() : plan;
+  const mealDate = obj.mealDate || dateFromLegacySlot(obj.weekStartDate, obj.day);
+  const serializedDate = formatDateOnly(mealDate);
   const resolvedRecipe = recipe || obj.recipeSnapshot;
+  const serializedPlan = {
+    ...obj,
+    mealDate,
+    date: serializedDate,
+    day: dayFromDate(mealDate)
+  };
+
   return resolvedRecipe
     ? {
-        ...obj,
+        ...serializedPlan,
         recipe: {
           id: resolvedRecipe.externalId || resolvedRecipe.id || String(resolvedRecipe._id),
           source: resolvedRecipe.source || obj.recipeSource,
@@ -81,12 +123,24 @@ function serializeMealPlan(plan, recipe) {
           servings: resolvedRecipe.servings || 1
         }
       }
-    : obj;
+    : serializedPlan;
 }
 
 export async function listMealPlansForWeek(user, week) {
   const weekStartDate = normalizeWeekStartDate(week);
-  const plans = await MealPlan.find({ userId: user._id, weekStartDate }).lean();
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setUTCDate(weekEndDate.getUTCDate() + 7);
+  return listMealPlansBetweenDates(user, weekStartDate, weekEndDate, { includeLegacyWeekStartDate: weekStartDate });
+}
+
+async function listMealPlansBetweenDates(user, startDate, exclusiveEndDate, options = {}) {
+  const plans = await MealPlan.find({
+    userId: user._id,
+    $or: [
+      { mealDate: { $gte: startDate, $lt: exclusiveEndDate } },
+      ...(options.includeLegacyWeekStartDate ? [{ mealDate: { $exists: false }, weekStartDate: options.includeLegacyWeekStartDate }] : [])
+    ]
+  }).lean();
 
   const serializedPlans = await Promise.all(
     plans.map(async (plan) => {
@@ -96,27 +150,45 @@ export async function listMealPlansForWeek(user, week) {
   );
 
   return serializedPlans.sort(
-    (a, b) => mealPlanDays.indexOf(a.day) - mealPlanDays.indexOf(b.day) || mealTypes.indexOf(a.mealType) - mealTypes.indexOf(b.mealType)
+    (a, b) => String(a.date).localeCompare(String(b.date)) || mealTypes.indexOf(a.mealType) - mealTypes.indexOf(b.mealType)
   );
+}
+
+export async function listMealPlansForDateRange(user, start, end) {
+  const startDate = normalizeDateOnly(start, "start");
+  const endDate = normalizeDateOnly(end, "end");
+  const exclusiveEndDate = new Date(endDate);
+  exclusiveEndDate.setUTCDate(exclusiveEndDate.getUTCDate() + 1);
+
+  if (exclusiveEndDate.getTime() <= startDate.getTime()) {
+    throw badRequest("end must be greater than or equal to start");
+  }
+
+  return listMealPlansBetweenDates(user, startDate, exclusiveEndDate);
 }
 
 export async function createOrReplaceMealPlan(user, payload) {
   validateSlot(payload);
-  const weekStartDate = normalizeWeekStartDate(payload.weekStartDate);
+  const mealDate = readMealDate(payload);
+  const weekStartDate = weekStartFromDate(mealDate);
+  const day = dayFromDate(mealDate);
   const recipe = await readRecipe(payload.recipeId, payload.recipeSource);
   const servings = resolveServings(payload.servings, user, recipe);
 
   const plan = await MealPlan.findOneAndUpdate(
     {
       userId: user._id,
-      weekStartDate,
-      day: payload.day,
-      mealType: payload.mealType
+      mealType: payload.mealType,
+      $or: [
+        { mealDate },
+        { mealDate: { $exists: false }, weekStartDate, day }
+      ]
     },
     {
       userId: user._id,
+      mealDate,
       weekStartDate,
-      day: payload.day,
+      day,
       mealType: payload.mealType,
       recipeId: payload.recipeId,
       recipeSource: payload.recipeSource,

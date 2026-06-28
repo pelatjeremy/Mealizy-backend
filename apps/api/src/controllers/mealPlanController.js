@@ -2,11 +2,17 @@ import asyncHandler from "express-async-handler";
 import {
   createOrReplaceMealPlan,
   deleteMealPlan,
+  listMealPlansForDateRange,
   listMealPlansForWeek,
   updateMealPlan
 } from "../services/mealPlanService.js";
 
 export const listMealPlans = asyncHandler(async (req, res) => {
+  if (req.query.start || req.query.end) {
+    res.json(await listMealPlansForDateRange(req.user, req.query.start, req.query.end));
+    return;
+  }
+
   res.json(await listMealPlansForWeek(req.user, req.query.week));
 });
 
