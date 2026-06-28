@@ -38,7 +38,7 @@ export function RecipeSuggestions({ recipes }: { recipes: Recipe[] }) {
           </div>
         </div>
       ))}
-      <a className="outline-action" href="/recipes">Voir plus de suggestions</a>
+      <a className="outline-action" href="/recipes/suggestions">Voir plus de suggestions</a>
     </section>
   );
 }

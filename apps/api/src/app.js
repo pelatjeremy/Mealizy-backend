@@ -9,7 +9,7 @@ import catalogRoutes from "./routes/catalogRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
 import mealPlanRoutes from "./routes/mealPlanRoutes.js";
 import recipeRoutes from "./routes/recipeRoutes.js";
-import shoppingListRoutes from "./routes/shoppingListRoutes.js";
+import shoppingListRoutes, { recipeShoppingListRouter } from "./routes/shoppingListRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 export const app = express();
@@ -52,6 +52,7 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api/recipes", recipeRoutes);
 app.use("/api/meal-plans", mealPlanRoutes);
 app.use("/api/shopping-list", shoppingListRoutes);
+app.use("/api/shopping-lists", recipeShoppingListRouter);
 
 app.use(notFound);
 app.use(errorHandler);

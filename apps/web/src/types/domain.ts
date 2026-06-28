@@ -18,6 +18,11 @@ export type RecipeIngredient = {
   sourceMetadata?: Record<string, unknown>;
 };
 
+export type ShoppingListSourceRecipe = {
+  recipeId: string;
+  title?: string;
+};
+
 export type Recipe = {
   _id?: string;
   id?: string;
@@ -104,6 +109,55 @@ export type RecipeCompatibility = {
   partial: RecipeCompatibilityIngredient[];
 };
 
+export type RecipeRecommendation = "cook_now" | "almost_ready" | "shopping_needed" | "not_recommended";
+
+export type RecipeScoreIngredient = RecipeCompatibilityIngredient & {
+  importance: "essential" | "important" | "optional";
+};
+
+export type RecipeScore = {
+  recipeId: string;
+  compatibilityScore: number;
+  availabilityScore: number;
+  quantityScore: number;
+  essentialScore: number;
+  missingImpactScore: number;
+  recommendation: RecipeRecommendation;
+  missingCriticalIngredients: string[];
+  missingOptionalIngredients: string[];
+  matched: RecipeScoreIngredient[];
+  partial: RecipeScoreIngredient[];
+  missing: RecipeScoreIngredient[];
+  inventoryCompatibility: RecipeCompatibility;
+};
+
+export type RecipeSuggestionGroup = "readyToCook" | "highlyRecommended" | "missingFewIngredients" | "lowCompatibility";
+
+export type RecipeSuggestion = {
+  recipe: Recipe;
+  score: number;
+  recommendation: RecipeRecommendation;
+  group: RecipeSuggestionGroup;
+  explanation: string;
+  missingIngredients: string[];
+  partialIngredients: string[];
+  availableIngredients: string[];
+  missingCount: number;
+  scoreDetails: RecipeScore;
+};
+
+export type RecipeSuggestionResponse = {
+  summary: {
+    totalRecipesAnalyzed: number;
+    readyToCook: number;
+    highlyRecommended: number;
+    missingFewIngredients: number;
+    lowCompatibility: number;
+  };
+  suggestions: RecipeSuggestion[];
+  groups: Record<RecipeSuggestionGroup, RecipeSuggestion[]>;
+};
+
 export type InventoryItem = {
   id?: string;
   _id?: string;
@@ -121,20 +175,32 @@ export type InventoryItem = {
 export type ShoppingItem = {
   id: string;
   _id?: string;
+  ingredientId?: string;
   ingredientName: string;
+  displayName?: string;
+  normalizedName?: string;
   quantity: number;
   unit: string;
+  standardQuantity?: number;
+  standardUnit?: string;
   category: string;
   checked: boolean;
+  isChecked?: boolean;
+  sourceRecipes?: ShoppingListSourceRecipe[];
 };
 
 export type ShoppingList = {
   _id?: string;
   userId?: string;
-  weekStartDate: string;
+  title?: string;
+  status?: "active" | "completed" | "archived";
+  weekStartDate?: string;
+  sourceRecipes?: ShoppingListSourceRecipe[];
   items: ShoppingItem[];
   generatedAt?: string;
   isCompleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type UserProfile = {

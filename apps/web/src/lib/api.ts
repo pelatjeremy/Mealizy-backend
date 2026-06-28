@@ -1,4 +1,4 @@
-import type { InventoryItem, MealPlan, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, RecipeCompatibility, ShoppingList, UserProfile } from "@/types/domain";
+import type { InventoryItem, MealPlan, MealType, Recipe, RecipeCatalogResponse, RecipeCatalogSource, RecipeCompatibility, RecipeScore, RecipeSuggestionResponse, ShoppingList, UserProfile } from "@/types/domain";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
@@ -40,7 +40,7 @@ export async function getRecipeSuggestions(token: string, params: Record<string,
     if (value !== undefined && String(value).trim() !== "") query.set(key, String(value));
   });
 
-  return request<Recipe[]>(`/recipes/suggestions?${query.toString()}`, {
+  return request<RecipeSuggestionResponse>(`/recipes/suggestions?${query.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
 }
@@ -117,6 +117,13 @@ export async function getRecipe(id: string, source?: Recipe["source"], token?: s
 export async function getRecipeCompatibility(token: string, id: string, source?: Recipe["source"]) {
   const params = source ? `?source=${encodeURIComponent(source)}` : "";
   return request<RecipeCompatibility>(`/recipes/${encodeURIComponent(id)}/compatibility${params}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function getRecipeScore(token: string, id: string, source?: Recipe["source"]) {
+  const params = source ? `?source=${encodeURIComponent(source)}` : "";
+  return request<RecipeScore>(`/recipes/${encodeURIComponent(id)}/score${params}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
 }
@@ -231,6 +238,55 @@ export async function updateShoppingListItemChecked(token: string, id: string, c
     body: JSON.stringify({ checked })
   });
   return normalizeShoppingList(list);
+}
+
+export async function getShoppingLists(token: string) {
+  const lists = await request<ShoppingList[]>("/shopping-lists", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return lists.map(normalizeShoppingList);
+}
+
+export async function getShoppingListDetail(token: string, id: string) {
+  const list = await request<ShoppingList>(`/shopping-lists/${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function createShoppingListFromRecipe(token: string, recipeId: string, source?: Recipe["source"]) {
+  const params = source ? `?source=${encodeURIComponent(source)}` : "";
+  const list = await request<ShoppingList>(`/shopping-lists/from-recipe/${encodeURIComponent(recipeId)}${params}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({})
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function createShoppingListFromRecipes(token: string, recipeIds: string[]) {
+  const list = await request<ShoppingList>("/shopping-lists/from-recipes", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ recipeIds })
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function updateRecipeShoppingListItemChecked(token: string, listId: string, itemId: string, checked: boolean) {
+  const list = await request<ShoppingList>(`/shopping-lists/${encodeURIComponent(listId)}/items/${encodeURIComponent(itemId)}/check`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ checked })
+  });
+  return normalizeShoppingList(list);
+}
+
+export async function deleteShoppingList(token: string, id: string) {
+  await request<void>(`/shopping-lists/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
 }
 
 export async function completeShoppingList(token: string, week: string) {

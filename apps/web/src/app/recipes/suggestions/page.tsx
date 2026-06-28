@@ -2,35 +2,43 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, CircleAlert, Loader2, Search, SlidersHorizontal } from "lucide-react";
-import { getProfile, getRecipeSuggestions, readAuthToken } from "@/lib/api";
+import { CalendarPlus, CircleAlert, Loader2, Search, ShoppingCart, SlidersHorizontal } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { createShoppingListFromRecipes, getProfile, getRecipeSuggestions, readAuthToken } from "@/lib/api";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
-import type { Recipe, UserProfile } from "@/types/domain";
+import type { Recipe, RecipeRecommendation, RecipeSuggestion, RecipeSuggestionGroup, RecipeSuggestionResponse, UserProfile } from "@/types/domain";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 
-const coverageOptions = [
-  { value: "", label: "Tout" },
-  { value: "90", label: "Couverture > 90%" },
-  { value: "75", label: "Couverture > 75%" },
-  { value: "50", label: "Couverture > 50%" },
-  { value: "25", label: "Couverture > 25%" }
-];
+const emptyResponse: RecipeSuggestionResponse = {
+  summary: {
+    totalRecipesAnalyzed: 0,
+    readyToCook: 0,
+    highlyRecommended: 0,
+    missingFewIngredients: 0,
+    lowCompatibility: 0
+  },
+  suggestions: [],
+  groups: {
+    readyToCook: [],
+    highlyRecommended: [],
+    missingFewIngredients: [],
+    lowCompatibility: []
+  }
+};
 
-const categoryOptions = [
-  "Viande",
-  "Volaille",
-  "Poisson",
-  "Fruits de mer",
-  "Legumes",
-  "Feculents",
-  "Vegetarien",
-  "Vegan",
-  "Dessert",
-  "Petit dejeuner",
-  "Entree",
-  "Plat principal",
-  "Accompagnement"
-];
+const recommendationLabels: Record<RecipeRecommendation, string> = {
+  cook_now: "Pret a cuisiner",
+  almost_ready: "Fortement recommande",
+  shopping_needed: "Il manque peu",
+  not_recommended: "Peu compatible"
+};
+
+const groupLabels: Record<RecipeSuggestionGroup, string> = {
+  readyToCook: "Pretes a cuisiner",
+  highlyRecommended: "Fortement recommandees",
+  missingFewIngredients: "Il manque 1 ou 2 ingredients",
+  lowCompatibility: "Peu adaptees"
+};
 
 function recipeSource(recipe: Recipe): "api" | "user" | "demo" {
   return recipe.source || (recipe.externalId?.startsWith("demo-") ? "demo" : "user");
@@ -40,28 +48,52 @@ function detailHref(recipe: Recipe) {
   return `/recipes/${encodeURIComponent(recipeId(recipe))}?source=${encodeURIComponent(recipeSource(recipe))}`;
 }
 
-function RecipeCard({ recipe, token, onPlan }: { recipe: Recipe; token: string; onPlan: (recipe: Recipe) => void }) {
-  const missingIngredients = recipe.missingIngredients || [];
-  const totalIngredients = recipe.ingredients?.length || (recipe.availableIngredientCount || 0) + (recipe.missingCount || 0);
+function badgeLabel(suggestion: RecipeSuggestion) {
+  if (suggestion.recommendation === "cook_now") return "Pret a cuisiner";
+  if (suggestion.missingCount === 1) return "Il manque 1 ingredient";
+  if (suggestion.recommendation === "not_recommended") return "Peu compatible";
+  return recommendationLabels[suggestion.recommendation];
+}
+
+function RecipeCard({
+  suggestion,
+  token,
+  selected,
+  onSelect,
+  onPlan
+}: {
+  suggestion: RecipeSuggestion;
+  token: string;
+  selected: boolean;
+  onSelect: (recipe: Recipe, selected: boolean) => void;
+  onPlan: (recipe: Recipe) => void;
+}) {
+  const recipe = suggestion.recipe;
+  const missing = [...suggestion.missingIngredients, ...suggestion.partialIngredients];
 
   return (
     <article className="suggestion-card">
       {recipe.image ? <img src={recipe.image} alt="" /> : <div className="recipe-image-placeholder">Mealizy</div>}
       <div className="suggestion-card-body">
-        <div>
+        <div className="suggestion-card-heading">
           <Link href={detailHref(recipe)}><strong>{recipe.title}</strong></Link>
-          <span>{recipe.nutrition?.calories || 0} kcal · {recipe.servings || 1} portions · score {recipe.score || 0}</span>
+          <span className={`suggestion-badge ${suggestion.group}`}>{badgeLabel(suggestion)}</span>
         </div>
-        <p>{recipe.availableIngredientCount || 0}/{totalIngredients || 0} ingredients disponibles · {recipe.coverage || 0}% couverture</p>
-        <p>{recipe.missingCount || 0} ingredient{recipe.missingCount === 1 ? "" : "s"} manquant{recipe.missingCount === 1 ? "" : "s"}</p>
-        {missingIngredients.length > 0 && (
+        <label className="suggestion-select">
+          <input type="checkbox" checked={selected} onChange={(event) => onSelect(recipe, event.target.checked)} />
+          Ajouter a la liste
+        </label>
+        <div className="suggestion-score-row">
+          <strong>{suggestion.score}%</strong>
+          <span>{recommendationLabels[suggestion.recommendation]}</span>
+        </div>
+        <p>{suggestion.explanation}</p>
+        {missing.length > 0 ? (
           <ul>
-            {missingIngredients.slice(0, 4).map((ingredient) => (
-              <li key={`${recipeId(recipe)}-${ingredient.normalizedName}`}>
-                {ingredient.ingredientName} · {ingredient.quantity} {ingredient.unit}
-              </li>
-            ))}
+            {missing.slice(0, 4).map((ingredient) => <li key={`${recipeId(recipe)}-${ingredient}`}>{ingredient}</li>)}
           </ul>
+        ) : (
+          <p>Aucun ingredient manquant.</p>
         )}
         <button className="outline-action" type="button" disabled={!token || !recipeId(recipe)} onClick={() => onPlan(recipe)}>
           <CalendarPlus size={17} /> Ajouter au planning
@@ -72,19 +104,21 @@ function RecipeCard({ recipe, token, onPlan }: { recipe: Recipe; token: string; 
 }
 
 export default function RecipeSuggestionsPage() {
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const router = useRouter();
+  const [response, setResponse] = useState<RecipeSuggestionResponse>(emptyResponse);
   const [query, setQuery] = useState("");
-  const [coverage, setCoverage] = useState("");
+  const [minScore, setMinScore] = useState("");
+  const [missingMax, setMissingMax] = useState("");
   const [category, setCategory] = useState("");
-  const [maxCalories, setMaxCalories] = useState("");
-  const [minProtein, setMinProtein] = useState("");
-  const [maxTime, setMaxTime] = useState("");
+  const [readyOnly, setReadyOnly] = useState(false);
   const [token, setToken] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [selectedRecipeIds, setSelectedRecipeIds] = useState<string[]>([]);
+  const [isCreatingShoppingList, setIsCreatingShoppingList] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
 
-  const topRecipe = useMemo(() => recipes[0], [recipes]);
+  const topSuggestion = useMemo(() => response.suggestions[0], [response]);
 
   useEffect(() => {
     const authToken = readAuthToken();
@@ -99,28 +133,49 @@ export default function RecipeSuggestionsPage() {
   useEffect(() => {
     if (!token) return;
     setStatus("loading");
-    getRecipeSuggestions(token, { q: query, coverage, category, maxCalories, minProtein, maxTime })
+    getRecipeSuggestions(token, {
+      q: query,
+      minScore,
+      missingMax,
+      category,
+      readyOnly: readyOnly ? "true" : undefined,
+      limit: 20
+    })
       .then((results) => {
-        setRecipes(results);
+        setResponse(results);
+        setSelectedRecipeIds([]);
         setStatus("ready");
       })
       .catch(() => setStatus("error"));
-  }, [category, coverage, maxCalories, maxTime, minProtein, query, token]);
+  }, [category, minScore, missingMax, query, readyOnly, token]);
+
+  function updateSelectedRecipe(recipe: Recipe, selected: boolean) {
+    const id = recipeId(recipe);
+    setSelectedRecipeIds((current) => selected ? [...new Set([...current, id])] : current.filter((value) => value !== id));
+  }
+
+  function createSelectedShoppingList() {
+    if (!token || !selectedRecipeIds.length) return;
+    setIsCreatingShoppingList(true);
+    createShoppingListFromRecipes(token, selectedRecipeIds)
+      .then((list) => {
+        if (list._id) router.push(`/shopping-lists?id=${encodeURIComponent(list._id)}`);
+      })
+      .catch(() => setStatus("error"))
+      .finally(() => setIsCreatingShoppingList(false));
+  }
 
   return (
-    <PageScaffold title="Suggestions" description="Recettes triees par score selon votre inventaire reel.">
+    <PageScaffold title="Suggestions intelligentes" description="Recettes triees par score intelligent selon votre inventaire.">
       <section className="recipe-filters" aria-label="Filtres suggestions">
         <div className="search-bar"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une suggestion" /></div>
-        <select value={coverage} onChange={(event) => setCoverage(event.target.value)}>
-          {coverageOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
-        </select>
-        <select value={category} onChange={(event) => setCategory(event.target.value)}>
-          <option value="">Toutes categories</option>
-          {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
-        <input value={maxCalories} onChange={(event) => setMaxCalories(event.target.value)} inputMode="numeric" placeholder="Calories max" />
-        <input value={minProtein} onChange={(event) => setMinProtein(event.target.value)} inputMode="numeric" placeholder="Proteines min" />
-        <input value={maxTime} onChange={(event) => setMaxTime(event.target.value)} inputMode="numeric" placeholder="Temps max" />
+        <input value={minScore} onChange={(event) => setMinScore(event.target.value)} inputMode="numeric" placeholder="Score min" />
+        <input value={missingMax} onChange={(event) => setMissingMax(event.target.value)} inputMode="numeric" placeholder="Manquants max" />
+        <input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Categorie" />
+        <label className="filter-toggle">
+          <input type="checkbox" checked={readyOnly} onChange={(event) => setReadyOnly(event.target.checked)} />
+          Pret uniquement
+        </label>
       </section>
 
       {status === "loading" && <div className="state-panel"><Loader2 size={22} /> Chargement des suggestions</div>}
@@ -129,25 +184,57 @@ export default function RecipeSuggestionsPage() {
 
       {status === "ready" && (
         <>
-          {topRecipe && (
+          <section className="suggestion-summary">
+            <div><strong>{response.summary.totalRecipesAnalyzed}</strong><span>analysees</span></div>
+            <div><strong>{response.summary.readyToCook}</strong><span>pretes</span></div>
+            <div><strong>{response.summary.highlyRecommended}</strong><span>recommandees</span></div>
+            <div><strong>{response.summary.missingFewIngredients}</strong><span>presque pretes</span></div>
+            <div><strong>{response.summary.lowCompatibility}</strong><span>peu compatibles</span></div>
+          </section>
+
+          {topSuggestion && (
             <section className="top-suggestion panel">
               <div>
                 <SlidersHorizontal size={20} />
-                <h2>Top suggestion du moment</h2>
-                <p>{topRecipe.title} · score {topRecipe.score || 0} · {topRecipe.missingCount || 0} ingredients manquants</p>
+                <h2>Meilleure suggestion</h2>
+                <p>{topSuggestion.recipe.title} - {topSuggestion.score}% - {topSuggestion.explanation}</p>
               </div>
-              <button className="primary-action" type="button" onClick={() => setSelectedRecipe(topRecipe)}>
+              <button className="primary-action" type="button" onClick={() => setSelectedRecipe(topSuggestion.recipe)}>
                 <CalendarPlus size={17} /> Planifier
               </button>
             </section>
           )}
 
-          <section className="suggestion-grid">
-            {recipes.map((recipe) => (
-              <RecipeCard key={`${recipe.source}-${recipeId(recipe)}-${recipe.title}`} recipe={recipe} token={token} onPlan={setSelectedRecipe} />
-            ))}
+          <section className="suggestion-selection-bar">
+            <span>{selectedRecipeIds.length} recette{selectedRecipeIds.length > 1 ? "s" : ""} selectionnee{selectedRecipeIds.length > 1 ? "s" : ""}</span>
+            <button className="primary-action" type="button" disabled={!selectedRecipeIds.length || isCreatingShoppingList} onClick={createSelectedShoppingList}>
+              {isCreatingShoppingList ? <Loader2 size={17} /> : <ShoppingCart size={17} />} Creer une liste
+            </button>
           </section>
-          {!recipes.length && <div className="state-panel">Aucune suggestion ne correspond aux filtres.</div>}
+
+          {(["readyToCook", "highlyRecommended", "missingFewIngredients", "lowCompatibility"] as RecipeSuggestionGroup[]).map((group) => {
+            const suggestions = response.groups[group];
+            if (!suggestions.length) return null;
+            return (
+              <section className="suggestion-group-section" key={group}>
+                <h2>{groupLabels[group]}</h2>
+                <div className="suggestion-grid">
+                  {suggestions.map((suggestion) => (
+                    <RecipeCard
+                      key={`${suggestion.recipe.source}-${recipeId(suggestion.recipe)}-${suggestion.recipe.title}`}
+                      suggestion={suggestion}
+                      token={token}
+                      selected={selectedRecipeIds.includes(recipeId(suggestion.recipe))}
+                      onSelect={updateSelectedRecipe}
+                      onPlan={setSelectedRecipe}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+
+          {!response.suggestions.length && <div className="state-panel">Aucune suggestion ne correspond aux filtres.</div>}
         </>
       )}
 

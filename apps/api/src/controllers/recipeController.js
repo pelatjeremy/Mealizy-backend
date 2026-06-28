@@ -4,12 +4,13 @@ import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
 import {
   getRecipeById,
-  getRecipeSuggestions,
   importSpoonacularRecipe,
   searchRecipeLibrary,
   searchRecipesLegacy
 } from "../services/recipeService.js";
+import { getRecipeSuggestions } from "../services/recipeSuggestionService.js";
 import { getRecipeCompatibilityForUser } from "../services/recipeInventoryMatcher.js";
+import { scoreRecipeForUser } from "../services/recipeScoreEngine.js";
 
 function badRequest(message) {
   const error = new Error(message);
@@ -113,6 +114,13 @@ export const recipeCompatibility = asyncHandler(async (req, res) => {
   if (!recipe) throw notFound("Recipe not found");
 
   res.json(await getRecipeCompatibilityForUser(req.user._id, recipe));
+});
+
+export const recipeScore = asyncHandler(async (req, res) => {
+  const recipe = await getRecipeById(req.params.id, req.query.source);
+  if (!recipe) throw notFound("Recipe not found");
+
+  res.json(await scoreRecipeForUser(req.user._id, recipe));
 });
 
 export const createCustomRecipe = asyncHandler(async (req, res) => {

@@ -45,7 +45,13 @@ export function DashboardClient() {
           setInventory(inventoryItems);
           setMealPlans(plans);
           setShoppingItems(toShoppingItems(shoppingList.items));
-          setRecipes(suggestions);
+          setRecipes(
+            suggestions.suggestions.map((suggestion) => ({
+              ...suggestion.recipe,
+              score: suggestion.score,
+              missingCount: suggestion.missingCount
+            }))
+          );
           setStatus("ready");
         })
         .catch(() => setStatus("error"));

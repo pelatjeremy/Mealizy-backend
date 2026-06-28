@@ -5,6 +5,7 @@ import {
   recipeCompatibility,
   recipeCatalog,
   recipeDetail,
+  recipeScore,
   searchRecipes,
   suggestions,
   updateCustomRecipe
@@ -18,6 +19,7 @@ router.get("/catalog", requireAuth, recipeCatalog);
 router.get("/suggestions", requireAuth, suggestions);
 router.post("/import/spoonacular/:id", requireAuth, importFromSpoonacular);
 router.get("/:id/compatibility", requireAuth, recipeCompatibility);
+router.get("/:id/score", requireAuth, recipeScore);
 router.get("/:id", recipeDetail);
 router.post("/", requireAuth, createCustomRecipe);
 router.put("/:id", requireAuth, updateCustomRecipe);

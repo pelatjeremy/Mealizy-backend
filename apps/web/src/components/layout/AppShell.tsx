@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChefHat,
   ClipboardCheck,
+  ClipboardList,
   Heart,
   Home,
   LogIn,
@@ -26,6 +27,7 @@ const privateNav = [
   { href: "/recipes/suggestions", label: "Suggestions", icon: ClipboardCheck },
   { href: "/meal-plans", label: "Planning repas", icon: CalendarDays },
   { href: "/shopping-list", label: "Liste de courses", icon: ShoppingCart },
+  { href: "/shopping-lists", label: "Listes intelligentes", icon: ClipboardList },
   { href: "/my-recipes", label: "Mes recettes", icon: Heart },
   { href: "/profile", label: "Profil", icon: UserRound },
   { href: "/settings", label: "Parametres", icon: Settings }

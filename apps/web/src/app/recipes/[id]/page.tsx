@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CalendarPlus, CircleAlert, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarPlus, CircleAlert, Loader2, ShoppingCart } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getApiErrorMessage, getProfile, getRecipe, getRecipeCompatibility, readAuthToken } from "@/lib/api";
+import { createShoppingListFromRecipe, getApiErrorMessage, getProfile, getRecipe, getRecipeScore, readAuthToken } from "@/lib/api";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
-import type { Recipe, RecipeCompatibility, RecipeCompatibilityIngredient, UserProfile } from "@/types/domain";
+import type { Recipe, RecipeRecommendation, RecipeScore, RecipeScoreIngredient, UserProfile } from "@/types/domain";
 
 type Status = "loading" | "ready" | "error";
 
@@ -31,7 +31,14 @@ function formatCompatibilityQuantity(value?: number, unit?: string) {
   return `${formatQuantity(Number(value || 0))} ${unit || ""}`.trim();
 }
 
-function CompatibilityList({ items, emptyText, partial }: { items: RecipeCompatibilityIngredient[]; emptyText: string; partial?: boolean }) {
+const recommendationLabels: Record<RecipeRecommendation, string> = {
+  cook_now: "Pret a cuisiner",
+  almost_ready: "Presque pret",
+  shopping_needed: "Courses utiles",
+  not_recommended: "Peu recommande"
+};
+
+function CompatibilityList({ items, emptyText, partial }: { items: RecipeScoreIngredient[]; emptyText: string; partial?: boolean }) {
   if (!items.length) return <p>{emptyText}</p>;
 
   return (
@@ -59,9 +66,10 @@ export default function RecipeDetailPage() {
   const [token, setToken] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
-  const [compatibility, setCompatibility] = useState<RecipeCompatibility | null>(null);
-  const [compatibilityError, setCompatibilityError] = useState("");
+  const [recipeScore, setRecipeScore] = useState<RecipeScore | null>(null);
+  const [recipeScoreError, setRecipeScoreError] = useState("");
   const [isPlanning, setIsPlanning] = useState(false);
+  const [isCreatingShoppingList, setIsCreatingShoppingList] = useState(false);
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState("");
 
@@ -77,21 +85,21 @@ export default function RecipeDetailPage() {
     setToken(authToken);
     setStatus("loading");
     setError("");
-    setCompatibility(null);
-    setCompatibilityError("");
+    setRecipeScore(null);
+    setRecipeScoreError("");
 
     Promise.all([
       getRecipe(id, source, authToken),
       authToken ? getProfile(authToken).catch(() => null) : Promise.resolve(null),
-      authToken ? getRecipeCompatibility(authToken, id, source).catch((caughtError) => {
-        setCompatibilityError(getApiErrorMessage(caughtError, "Compatibilite indisponible."));
+      authToken ? getRecipeScore(authToken, id, source).catch((caughtError) => {
+        setRecipeScoreError(getApiErrorMessage(caughtError, "Score indisponible."));
         return null;
       }) : Promise.resolve(null)
     ])
-      .then(([loadedRecipe, loadedProfile, loadedCompatibility]) => {
+      .then(([loadedRecipe, loadedProfile, loadedRecipeScore]) => {
         setRecipe(loadedRecipe);
         setProfile(loadedProfile);
-        setCompatibility(loadedCompatibility);
+        setRecipeScore(loadedRecipeScore);
         setStatus("ready");
       })
       .catch((caughtError) => {
@@ -101,7 +109,21 @@ export default function RecipeDetailPage() {
   }, [id, source]);
 
   const canPlan = Boolean(token && recipe && recipeId(recipe));
+  const canCreateShoppingList = Boolean(token && recipe && recipeId(recipe));
   const summary = stripHtml(recipe?.summary || recipe?.description || "");
+
+  function handleCreateShoppingList() {
+    if (!token || !recipe) return;
+    setIsCreatingShoppingList(true);
+    createShoppingListFromRecipe(token, recipeId(recipe), source)
+      .then((list) => {
+        if (list._id) router.push(`/shopping-lists?id=${encodeURIComponent(list._id)}`);
+      })
+      .catch((caughtError) => {
+        setRecipeScoreError(getApiErrorMessage(caughtError, "Impossible de creer la liste de courses."));
+      })
+      .finally(() => setIsCreatingShoppingList(false));
+  }
 
   return (
     <PageScaffold title="Fiche recette" description="Ingredients, etapes, nutrition et informations utiles.">
@@ -110,9 +132,14 @@ export default function RecipeDetailPage() {
           <ArrowLeft size={17} /> Retour
         </button>
         {recipe && (
-          <button className="primary-action" type="button" disabled={!canPlan} onClick={() => setIsPlanning(true)}>
-            <CalendarPlus size={17} /> Ajouter au planning
-          </button>
+          <div className="recipe-detail-actions">
+            <button className="outline-action" type="button" disabled={!canCreateShoppingList || isCreatingShoppingList} onClick={handleCreateShoppingList}>
+              {isCreatingShoppingList ? <Loader2 size={17} /> : <ShoppingCart size={17} />} Creer la liste de courses
+            </button>
+            <button className="primary-action" type="button" disabled={!canPlan} onClick={() => setIsPlanning(true)}>
+              <CalendarPlus size={17} /> Ajouter au planning
+            </button>
+          </div>
         )}
       </div>
 
@@ -158,22 +185,33 @@ export default function RecipeDetailPage() {
             </div>
 
             <div className="panel recipe-detail-section compatibility-panel">
-              <h3>Compatibilite inventaire</h3>
-              {!token && <p>Connectez-vous pour comparer cette recette a votre inventaire.</p>}
-              {token && compatibilityError && <p>{compatibilityError}</p>}
-              {token && !compatibility && !compatibilityError && <p>Comparaison en cours...</p>}
-              {compatibility && (
+              <h3>Score intelligent</h3>
+              {!token && <p>Connectez-vous pour scorer cette recette avec votre inventaire.</p>}
+              {token && recipeScoreError && <p>{recipeScoreError}</p>}
+              {token && !recipeScore && !recipeScoreError && <p>Calcul en cours...</p>}
+              {recipeScore && (
                 <>
                   <div className="compatibility-score">
-                    <strong>{compatibility.compatibilityScore}%</strong>
-                    <span>{compatibility.availableIngredients} disponibles, {compatibility.partialIngredients} partiels, {compatibility.missingIngredients} manquants</span>
+                    <strong>{recipeScore.compatibilityScore}%</strong>
+                    <span>{recommendationLabels[recipeScore.recommendation]}</span>
                   </div>
-                  <h4>Disponibles</h4>
-                  <CompatibilityList items={compatibility.matched} emptyText="Aucun ingredient completement disponible." />
-                  <h4>Partiels</h4>
-                  <CompatibilityList items={compatibility.partial} emptyText="Aucun ingredient partiellement disponible." partial />
-                  <h4>Manquants</h4>
-                  <CompatibilityList items={compatibility.missing} emptyText="Aucun ingredient manquant." />
+                  <div className="score-breakdown" aria-label="Sous-scores de recommandation">
+                    <span><strong>{recipeScore.availabilityScore}%</strong> dispo</span>
+                    <span><strong>{recipeScore.quantityScore}%</strong> quantites</span>
+                    <span><strong>{recipeScore.essentialScore}%</strong> essentiels</span>
+                  </div>
+                  <h4>Critiques manquants</h4>
+                  <CompatibilityList
+                    items={[...recipeScore.missing, ...recipeScore.partial].filter((item) => item.importance === "essential")}
+                    emptyText="Aucun ingredient critique manquant."
+                    partial
+                  />
+                  <h4>Secondaires manquants</h4>
+                  <CompatibilityList
+                    items={[...recipeScore.missing, ...recipeScore.partial].filter((item) => item.importance !== "essential")}
+                    emptyText="Aucun ingredient secondaire manquant."
+                    partial
+                  />
                 </>
               )}
             </div>
