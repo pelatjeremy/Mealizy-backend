@@ -1,0 +1,60 @@
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
+import morgan from "morgan";
+import { env } from "./config/env.js";
+import { errorHandler, notFound } from "./middlewares/errorMiddleware.js";
+import authRoutes from "./routes/authRoutes.js";
+import catalogRoutes from "./routes/catalogRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
+import mealPlanRoutes from "./routes/mealPlanRoutes.js";
+import recipeRoutes from "./routes/recipeRoutes.js";
+import shoppingListRoutes, { recipeShoppingListRouter } from "./routes/shoppingListRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+
+export const app = express();
+
+app.use(helmet());
+app.use(
+  cors({
+    origin(origin, callback) {
+      const isMealizyFrontendPreview = (() => {
+        if (!origin) return false;
+        try {
+          const { hostname } = new URL(origin);
+          return hostname.endsWith(".vercel.app") && hostname.startsWith("mealizy-frontend");
+        } catch {
+          return false;
+        }
+      })();
+
+      if (!origin || env.corsOrigins.includes(origin) || isMealizyFrontendPreview) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true
+  })
+);
+app.use(express.json({ limit: "1mb" }));
+app.use(morgan("dev"));
+
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.use("/api/auth", authRoutes);
+app.use("/api/catalog", catalogRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/recipes", recipeRoutes);
+app.use("/api/meal-plans", mealPlanRoutes);
+app.use("/api/shopping-list", shoppingListRoutes);
+app.use("/api/shopping-lists", recipeShoppingListRouter);
+
+app.use(notFound);
+app.use(errorHandler);
+
+export default app;
