@@ -7,28 +7,13 @@ import { asArray, getProfile, getRecipeCatalog, readAuthToken } from "@/lib/api"
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 import type { Recipe, RecipeCatalogSource, UserProfile } from "@/types/domain";
+import { recipeCategoryOptions } from "@/lib/recipe-filters";
 
 const tabs: { key: RecipeCatalogSource; label: string }[] = [
   { key: "all", label: "Bibliotheque" },
   { key: "mine", label: "Mes recettes" },
   { key: "mealizy", label: "Recettes Mealizy" },
   { key: "api", label: "Synchronisees" }
-];
-
-const categoryOptions = [
-  "Viande",
-  "Volaille",
-  "Poisson",
-  "Fruits de mer",
-  "Legumes",
-  "Feculents",
-  "Vegetarien",
-  "Vegan",
-  "Dessert",
-  "Petit dejeuner",
-  "Entree",
-  "Plat principal",
-  "Accompagnement"
 ];
 
 function recipeSource(recipe: Recipe): "api" | "user" | "demo" {
@@ -143,7 +128,7 @@ export default function RecipesPage() {
         <div className="search-bar"><Search size={18} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Rechercher une recette" /></div>
         <select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }}>
           <option value="">Toutes categories</option>
-          {categoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          {recipeCategoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
         <input value={maxCalories} onChange={(event) => setMaxCalories(event.target.value)} inputMode="numeric" placeholder="Calories max" />
         <input value={minProtein} onChange={(event) => setMinProtein(event.target.value)} inputMode="numeric" placeholder="Proteines min" />

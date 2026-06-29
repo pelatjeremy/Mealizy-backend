@@ -14,6 +14,7 @@ router.use(requireAuth);
 router.get("/", listInventory);
 router.get("/expiring-soon", expiringSoon);
 router.post("/", createInventoryItem);
+router.patch("/:id", updateInventoryItem);
 router.put("/:id", updateInventoryItem);
 router.delete("/:id", deleteInventoryItem);
 

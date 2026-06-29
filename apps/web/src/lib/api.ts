@@ -210,7 +210,49 @@ export async function getInventory(token: string) {
     headers: { Authorization: `Bearer ${token}` }
   });
   const value = asRecord(response);
-  return asArray<InventoryItem>(Array.isArray(response) ? response : value.items);
+  return asArray<InventoryItem>(Array.isArray(response) ? response : value.items).map(normalizeInventoryItem);
+}
+
+export type InventoryPayload = {
+  name: string;
+  quantity: number;
+  unit: string;
+  category: string;
+  expirationDate?: string;
+};
+
+function normalizeInventoryItem(item: InventoryItem): InventoryItem {
+  return {
+    ...item,
+    id: item.id || item._id || "",
+    name: item.name || item.ingredientId?.name || "Produit",
+    category: item.category || item.ingredientId?.category || "autres"
+  };
+}
+
+export async function createInventoryItem(token: string, payload: InventoryPayload) {
+  const item = await request<InventoryItem>("/inventory", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+  return normalizeInventoryItem(item);
+}
+
+export async function updateInventoryItem(token: string, id: string, payload: InventoryPayload) {
+  const item = await request<InventoryItem>(`/inventory/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+  return normalizeInventoryItem(item);
+}
+
+export async function deleteInventoryItem(token: string, id: string) {
+  await request<void>(`/inventory/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
 }
 
 export async function getMealPlans(token: string, week: string) {

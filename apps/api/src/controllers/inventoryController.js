@@ -1,11 +1,33 @@
 import asyncHandler from "express-async-handler";
+import mongoose from "mongoose";
 import { InventoryItem } from "../models/InventoryItem.js";
 import { findOrCreateIngredient } from "../services/ingredientService.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
-import { pickAllowedFields, rejectUnknownFields } from "../utils/validatePayload.js";
+import { badRequest, pickAllowedFields, rejectUnknownFields } from "../utils/validatePayload.js";
 
 const inventoryCreateFields = ["name", "category", "quantity", "unit", "expirationDate"];
 const inventoryUpdateFields = ["name", "category", "quantity", "unit", "expirationDate"];
+
+function notFound(message) {
+  const error = new Error(message);
+  error.statusCode = 404;
+  return error;
+}
+
+function validateInventoryId(id) {
+  if (!mongoose.isValidObjectId(id)) throw notFound("Inventory item not found");
+}
+
+export function validateInventoryQuantity(quantity, { required = false } = {}) {
+  if (quantity === undefined || quantity === null || quantity === "") {
+    if (required) throw badRequest("quantity is required");
+    return undefined;
+  }
+
+  const value = Number(quantity);
+  if (!Number.isFinite(value) || value < 0) throw badRequest("quantity must be a positive number");
+  return value;
+}
 
 async function backfillNormalizedNames(items) {
   await Promise.all(items.map(async (item) => {
@@ -23,12 +45,13 @@ export const listInventory = asyncHandler(async (req, res) => {
 
 export const createInventoryItem = asyncHandler(async (req, res) => {
   rejectUnknownFields(req.body, inventoryCreateFields, "inventaire");
+  const quantity = validateInventoryQuantity(req.body.quantity, { required: true });
   const ingredient = await findOrCreateIngredient({ name: req.body.name, category: req.body.category });
   const item = await InventoryItem.create({
     userId: req.user._id,
     ingredientId: ingredient._id,
     normalizedName: ingredient.normalizedName,
-    quantity: req.body.quantity,
+    quantity,
     unit: normalizeUnit(req.body.unit),
     expirationDate: req.body.expirationDate
   });
@@ -36,8 +59,10 @@ export const createInventoryItem = asyncHandler(async (req, res) => {
 });
 
 export const updateInventoryItem = asyncHandler(async (req, res) => {
+  validateInventoryId(req.params.id);
   const update = pickAllowedFields(req.body, inventoryUpdateFields, "inventaire");
   if (update.unit) update.unit = normalizeUnit(update.unit);
+  if (update.quantity !== undefined) update.quantity = validateInventoryQuantity(update.quantity);
   if (req.body.name) {
     const ingredient = await findOrCreateIngredient({ name: req.body.name, category: req.body.category });
     update.ingredientId = ingredient._id;
@@ -51,15 +76,15 @@ export const updateInventoryItem = asyncHandler(async (req, res) => {
     { new: true }
   ).populate("ingredientId");
   if (!item) {
-    const error = new Error("Inventory item not found");
-    error.statusCode = 404;
-    throw error;
+    throw notFound("Inventory item not found");
   }
   res.json(item);
 });
 
 export const deleteInventoryItem = asyncHandler(async (req, res) => {
-  await InventoryItem.deleteOne({ _id: req.params.id, userId: req.user._id });
+  validateInventoryId(req.params.id);
+  const result = await InventoryItem.deleteOne({ _id: req.params.id, userId: req.user._id });
+  if (!result.deletedCount) throw notFound("Inventory item not found");
   res.status(204).send();
 });
 

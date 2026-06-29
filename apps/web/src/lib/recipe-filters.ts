@@ -1,0 +1,21 @@
+export const recipeCategoryOptions = [
+  "Viande",
+  "Volaille",
+  "Poisson",
+  "Fruits de mer",
+  "Legumes",
+  "Feculents",
+  "Vegetarien",
+  "Vegan",
+  "Dessert",
+  "Petit dejeuner",
+  "Entree",
+  "Plat principal",
+  "Accompagnement",
+  "Fruits et legumes",
+  "Epicerie",
+  "Produits laitiers",
+  "Viandes et poissons",
+  "Surgeles",
+  "Autres"
+];

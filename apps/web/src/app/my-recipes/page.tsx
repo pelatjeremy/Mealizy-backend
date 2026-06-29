@@ -8,9 +8,11 @@ import { RecipeFormModal } from "@/components/recipes/RecipeFormModal";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 import type { Recipe, UserProfile } from "@/types/domain";
+import { recipeCategoryOptions } from "@/lib/recipe-filters";
 
 export default function MyRecipesPage() {
   const [token, setToken] = useState("");
+  const [category, setCategory] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
@@ -19,10 +21,10 @@ export default function MyRecipesPage() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [notice, setNotice] = useState("");
 
-  const loadRecipes = useCallback(async (authToken: string) => {
+  const loadRecipes = useCallback(async (authToken: string, nextCategory: string) => {
     setStatus("loading");
     try {
-      const result = await getRecipeCatalog(authToken, { source: "mine", page: 1, limit: 48 });
+      const result = await getRecipeCatalog(authToken, { source: "mine", category: nextCategory, page: 1, limit: 48 });
       setRecipes(asArray<Recipe>(result.items));
       setStatus("ready");
     } catch {
@@ -38,8 +40,13 @@ export default function MyRecipesPage() {
       return;
     }
     getProfile(authToken).then(setProfile).catch(() => setProfile(null));
-    loadRecipes(authToken);
+    loadRecipes(authToken, "");
   }, [loadRecipes]);
+
+  useEffect(() => {
+    if (!token) return;
+    loadRecipes(token, category);
+  }, [category, loadRecipes, token]);
 
   function handleCreated(recipe: Recipe) {
     setRecipes((items) => [recipe, ...asArray<Recipe>(items)]);
@@ -61,6 +68,12 @@ export default function MyRecipesPage() {
       action={<button className="primary-action" type="button" disabled={!token} onClick={() => setIsCreating(true)}><Plus size={18} /> Creer une recette</button>}
     >
       {notice && <div className="state-panel success-state">{notice}</div>}
+      <section className="recipe-filters" aria-label="Filtres de mes recettes">
+        <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filtrer mes recettes par categorie">
+          <option value="">Toutes categories</option>
+          {recipeCategoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </section>
       {status === "loading" && <div className="state-panel"><Loader2 size={22} /> Chargement de vos recettes</div>}
       {status === "missing-token" && <div className="state-panel"><CircleAlert size={22} /> Connectez-vous pour creer une recette.</div>}
       {status === "error" && <div className="state-panel"><CircleAlert size={22} /> Impossible de charger vos recettes.</div>}

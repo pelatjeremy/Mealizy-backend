@@ -8,6 +8,7 @@ import { asArray, createShoppingListFromRecipes, getProfile, getRecipeSuggestion
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import type { Recipe, RecipeRecommendation, RecipeSuggestion, RecipeSuggestionGroup, RecipeSuggestionResponse, UserProfile } from "@/types/domain";
 import { PageScaffold } from "@/components/ui/PageScaffold";
+import { recipeCategoryOptions } from "@/lib/recipe-filters";
 
 const emptyResponse: RecipeSuggestionResponse = {
   summary: {
@@ -173,7 +174,10 @@ export default function RecipeSuggestionsPage() {
         <div className="search-bar"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une suggestion" /></div>
         <input value={minScore} onChange={(event) => setMinScore(event.target.value)} inputMode="numeric" placeholder="Score min" />
         <input value={missingMax} onChange={(event) => setMissingMax(event.target.value)} inputMode="numeric" placeholder="Manquants max" />
-        <input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Categorie" />
+        <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filtrer par categorie">
+          <option value="">Toutes categories</option>
+          {recipeCategoryOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
         <label className="filter-toggle">
           <input type="checkbox" checked={readyOnly} onChange={(event) => setReadyOnly(event.target.checked)} />
           Pret uniquement

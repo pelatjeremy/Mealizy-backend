@@ -10,19 +10,37 @@ function stubCleanupModels() {
     userFindOne: User.findOne,
     recipeCountDocuments: Recipe.countDocuments,
     recipeFind: Recipe.find,
+    recipeUpdateOne: Recipe.updateOne,
     recipeDeleteMany: Recipe.deleteMany,
     ingredientCountDocuments: Ingredient.countDocuments,
     ingredientFind: Ingredient.find,
     ingredientDeleteMany: Ingredient.deleteMany
   };
-  const calls = { recipeDeleteMany: 0, ingredientDeleteMany: 0, recipeQuery: null };
+  const calls = { recipeDeleteMany: 0, ingredientDeleteMany: 0, recipeQueries: [], recipeUpdateOne: 0 };
 
   User.findOne = () => ({ select: () => ({ lean: async () => ({ _id: "demo-user-id", email: "demo@mealizy.app" }) }) });
   Recipe.countDocuments = async (query) => {
-    calls.recipeQuery = query;
+    calls.recipeQueries.push(query);
     return 2;
   };
-  Recipe.find = () => ({ limit: () => ({ lean: async () => [{ title: "Dashboard Pates 1781544751176", source: "user" }] }) });
+  Recipe.find = (_query, projection) => {
+    if (projection) {
+      return { limit: () => ({ lean: async () => [{ title: "Dashboard Pates 1781544751176", source: "user" }] }) };
+    }
+    return {
+      lean: async () => [{
+        _id: "recipe-to-sanitize",
+        title: "Pates propres",
+        image: "https://mealizy.local/placeholder.png",
+        summary: "Seed recipe generated for dashboard tests",
+        ingredients: [{ displayName: "prod_index_tomate", originalName: "tomate" }]
+      }]
+    };
+  };
+  Recipe.updateOne = async () => {
+    calls.recipeUpdateOne += 1;
+    return { modifiedCount: 1 };
+  };
   Recipe.deleteMany = async () => {
     calls.recipeDeleteMany += 1;
     return { deletedCount: 2 };
@@ -40,6 +58,7 @@ function stubCleanupModels() {
       User.findOne = originals.userFindOne;
       Recipe.countDocuments = originals.recipeCountDocuments;
       Recipe.find = originals.recipeFind;
+      Recipe.updateOne = originals.recipeUpdateOne;
       Recipe.deleteMany = originals.recipeDeleteMany;
       Ingredient.countDocuments = originals.ingredientCountDocuments;
       Ingredient.find = originals.ingredientFind;
@@ -57,10 +76,13 @@ test("beta cleanup dry-run reports matches without deleting data", async () => {
     assert.equal(report.mode, "dry-run");
     assert.equal(report.recipes.count, 2);
     assert.equal(report.ingredients.count, 1);
+    assert.equal(report.recipesToSanitize.count, 2);
     assert.equal(report.deleted.recipes, 0);
+    assert.equal(report.sanitized.recipes, 0);
     assert.equal(stub.calls.recipeDeleteMany, 0);
     assert.equal(stub.calls.ingredientDeleteMany, 0);
-    assert.deepEqual(stub.calls.recipeQuery.$or.at(-1), { userId: "demo-user-id" });
+    assert.equal(stub.calls.recipeUpdateOne, 0);
+    assert.ok(stub.calls.recipeQueries.some((query) => query.$or?.some((entry) => entry.userId === "demo-user-id")));
   } finally {
     stub.restore();
   }
@@ -75,9 +97,11 @@ test("beta cleanup execute deletes only matched demo and test data", async () =>
     assert.equal(report.mode, "execute");
     assert.equal(report.deleted.recipes, 2);
     assert.equal(report.deleted.ingredients, 1);
+    assert.equal(report.sanitized.recipes, 1);
     assert.equal(report.usersDeleted, 0);
     assert.equal(stub.calls.recipeDeleteMany, 1);
     assert.equal(stub.calls.ingredientDeleteMany, 1);
+    assert.equal(stub.calls.recipeUpdateOne, 1);
   } finally {
     stub.restore();
   }

@@ -12,6 +12,7 @@ import {
 import { getRecipeSuggestions } from "../services/recipeSuggestionService.js";
 import { getRecipeCompatibilityForUser } from "../services/recipeInventoryMatcher.js";
 import { scoreRecipeForUser } from "../services/recipeScoreEngine.js";
+import { sanitizeRecipeData, sanitizeRecipeForApi } from "../utils/recipeSanitizer.js";
 
 function badRequest(message) {
   const error = new Error(message);
@@ -74,7 +75,7 @@ function normalizeRecipePayload(body) {
     throw badRequest("Ajoutez au moins un ingredient avec une quantite");
   }
 
-  return {
+  return sanitizeRecipeData({
     title: String(body.title).trim(),
     image: String(body.image || "").trim() || "https://images.unsplash.com/photo-1547592180-85f173990554",
     preparationTime: Number(body.preparationTime || 20),
@@ -93,7 +94,7 @@ function normalizeRecipePayload(body) {
     diets: Array.isArray(body.diets) ? body.diets : [],
     cuisines: Array.isArray(body.cuisines) ? body.cuisines : [],
     tags: Array.isArray(body.tags) ? body.tags : []
-  };
+  });
 }
 
 export const searchRecipes = asyncHandler(async (req, res) => {
@@ -152,7 +153,7 @@ export const createCustomRecipe = asyncHandler(async (req, res) => {
     source: "user",
     userId: req.user._id
   });
-  res.status(201).json(recipe);
+  res.status(201).json(sanitizeRecipeForApi(recipe.toObject()));
 });
 
 export const updateCustomRecipe = asyncHandler(async (req, res) => {
@@ -164,5 +165,5 @@ export const updateCustomRecipe = asyncHandler(async (req, res) => {
 
   Object.assign(recipe, normalizeRecipePayload(req.body), { source: "user", userId: req.user._id });
   await recipe.save();
-  res.json(recipe);
+  res.json(sanitizeRecipeForApi(recipe.toObject()));
 });

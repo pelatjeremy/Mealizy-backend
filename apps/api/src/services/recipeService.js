@@ -8,6 +8,7 @@ import {
   SpoonacularApiError
 } from "./spoonacularService.js";
 import { normalizeRecipeIngredient } from "./ingredientMatcher.js";
+import { sanitizeRecipeData, sanitizeRecipeForApi } from "../utils/recipeSanitizer.js";
 
 const demoEmail = "demo@mealizy.app";
 const demoTitlePattern = /^(dashboard|demo|seed|test)\b/i;
@@ -192,7 +193,7 @@ export async function listRecipes({ q, page, limit, source = "all", user, filter
     Recipe.countDocuments(query)
   ]);
 
-  return { items, total, page: currentPage, limit: currentLimit, source };
+  return { items: items.map(sanitizeRecipeForApi), total, page: currentPage, limit: currentLimit, source };
 }
 
 export async function searchRecipesLegacy({ q }) {
@@ -205,12 +206,13 @@ function importedRecipeQuery(externalId) {
 }
 
 function withImportStatus(recipe, importedByExternalId) {
+  const cleanRecipe = sanitizeRecipeForApi(recipe);
   const externalId = recipe.externalId ? String(recipe.externalId) : "";
   const imported = externalId ? importedByExternalId.get(externalId) : null;
 
   if (imported) {
     return {
-      ...recipe,
+      ...cleanRecipe,
       isImported: true,
       importedRecipeId: String(imported._id),
       mealizyRecipeId: String(imported._id)
@@ -218,7 +220,7 @@ function withImportStatus(recipe, importedByExternalId) {
   }
 
   return {
-    ...recipe,
+    ...cleanRecipe,
     isImported: Boolean(recipe._id),
     importedRecipeId: recipe._id ? String(recipe._id) : undefined,
     mealizyRecipeId: recipe._id ? String(recipe._id) : undefined
@@ -266,7 +268,7 @@ export async function importSpoonacularRecipe(recipeId, user) {
     importedRecipeQuery(externalId),
     {
       $set: {
-        ...importedRecipe,
+        ...sanitizeRecipeData(importedRecipe),
         source: "api",
         sourceProvider: "spoonacular",
         externalId,
@@ -290,10 +292,11 @@ export async function getRecipeById(recipeId, source) {
   }
 
   const storedRecipe = await Recipe.findOne(recipeIdQuery(recipeId)).lean();
-  if (storedRecipe) return storedRecipe;
+  if (storedRecipe) return sanitizeRecipeForApi(storedRecipe);
 
   if (source === "demo" || String(recipeId).startsWith("demo-")) {
-    return demoRecipes.find((recipe) => recipe.externalId === recipeId);
+    const demoRecipe = demoRecipes.find((recipe) => recipe.externalId === recipeId);
+    return demoRecipe ? sanitizeRecipeForApi(demoRecipe) : demoRecipe;
   }
 
   return null;

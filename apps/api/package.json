@@ -14,7 +14,7 @@
     "cleanup:beta-data": "node src/scripts/cleanupBetaData.js",
     "migrate:recipes-ingredients": "node src/scripts/migrateRecipeIngredients.js",
     "sync:spoonacular": "node src/scripts/syncSpoonacularCatalog.js",
-    "sync:recipes": "node src/scripts/syncSpoonacularCatalog.js"
+    "sync:recipes": "node src/scripts/syncRecipes.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

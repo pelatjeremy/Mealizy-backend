@@ -1,6 +1,7 @@
 import { Recipe } from "../models/Recipe.js";
 import { normalizeRecipeIngredient } from "./ingredientMatcher.js";
 import { searchSpoonacularRecipes, SpoonacularApiError } from "./spoonacularService.js";
+import { sanitizeRecipeData } from "../utils/recipeSanitizer.js";
 
 function emptyReport(options = {}) {
   return {
@@ -77,7 +78,7 @@ async function upsertSyncedRecipe(recipe, options = {}) {
     { sourceProvider: "spoonacular", externalId },
     {
       $set: {
-        ...recipe,
+        ...sanitizeRecipeData(recipe),
         source: "api",
         sourceProvider: "spoonacular",
         externalId,
