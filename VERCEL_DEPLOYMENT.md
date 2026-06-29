@@ -27,6 +27,16 @@ NEXT_PUBLIC_API_URL=https://mealizy-backend.vercel.app/api
 
 ## Deployer le backend
 
+Le backend Express n'a pas d'etape de compilation: le script `@mealizy/api build` verifie seulement que le workspace API est joignable et affiche `No build step required for Mealizy API`.
+
+Si le projet Vercel backend est lie a la racine du monorepo, utiliser cette commande de build:
+
+```bash
+yarn workspace @mealizy/api build
+```
+
+La commande racine `yarn build` reste disponible pour construire les deux workspaces, mais elle ne doit pas utiliser `yarn workspaces foreach` afin de rester compatible avec Yarn v1 sur Vercel.
+
 ```bash
 corepack enable
 vercel link --cwd apps/api
