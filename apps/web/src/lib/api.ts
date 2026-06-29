@@ -161,6 +161,22 @@ export async function getProfile(token: string) {
   });
 }
 
+export async function updateProfile(token: string, payload: {
+  firstname?: string;
+  lastname?: string;
+  householdSize?: number;
+  enabledMealTypes?: MealType[];
+  availableEquipments?: string[];
+  dietaryPreferences?: string[];
+  allergies?: string[];
+}) {
+  return request<UserProfile>("/users/profile", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function getInventory(token: string) {
   return request<InventoryItem[]>("/inventory", {
     headers: { Authorization: `Bearer ${token}` }
@@ -181,6 +197,7 @@ export async function createMealPlan(
     recipeId: string;
     recipeSource: "api" | "user" | "demo";
     servings?: number;
+    metadata?: Record<string, unknown>;
   }
 ) {
   return request<MealPlan>("/meal-plans", {

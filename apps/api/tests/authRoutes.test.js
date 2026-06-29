@@ -42,19 +42,22 @@ function authUser(overrides = {}) {
   };
 }
 
-function stubUserModel({ create, findOne, findById } = {}) {
+function stubUserModel({ create, findOne, findById, findByIdAndUpdate } = {}) {
   const originalCreate = User.create;
   const originalFindOne = User.findOne;
   const originalFindById = User.findById;
+  const originalFindByIdAndUpdate = User.findByIdAndUpdate;
 
   if (create) User.create = create;
   if (findOne) User.findOne = findOne;
   if (findById) User.findById = findById;
+  if (findByIdAndUpdate) User.findByIdAndUpdate = findByIdAndUpdate;
 
   return () => {
     User.create = originalCreate;
     User.findOne = originalFindOne;
     User.findById = originalFindById;
+    User.findByIdAndUpdate = originalFindByIdAndUpdate;
   };
 }
 
@@ -199,3 +202,77 @@ test("protected profile route rejects missing token", async () => {
   });
 });
 
+test("PUT /api/users/profile rejects unknown update fields", async () => {
+  const restore = stubUserModel({
+    findById: () => ({
+      select: async () => authUser({ password: undefined })
+    }),
+    findByIdAndUpdate: () => {
+      throw new Error("findByIdAndUpdate should not be called for invalid payloads");
+    }
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const token = signToken("user-id");
+      const response = await fetch(`${baseUrl}/api/users/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ role: "admin" })
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.match(payload.message, /Champs non autorises/);
+    });
+  } finally {
+    restore();
+  }
+});
+
+test("PUT /api/users/profile accepts allowed preference fields", async () => {
+  const restore = stubUserModel({
+    findById: () => ({
+      select: async () => authUser({ password: undefined })
+    }),
+    findByIdAndUpdate: (_id, update, options) => ({
+      select: async () => authUser({
+        password: undefined,
+        householdSize: update.householdSize,
+        enabledMealTypes: update.enabledMealTypes,
+        availableEquipments: update.availableEquipments,
+        options
+      })
+    })
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const token = signToken("user-id");
+      const response = await fetch(`${baseUrl}/api/users/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          householdSize: 3,
+          enabledMealTypes: ["lunch", "dinner"],
+          availableEquipments: ["four"]
+        })
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.householdSize, 3);
+      assert.deepEqual(payload.enabledMealTypes, ["lunch", "dinner"]);
+      assert.deepEqual(payload.availableEquipments, ["four"]);
+      assert.equal(payload.options.runValidators, true);
+    });
+  } finally {
+    restore();
+  }
+});

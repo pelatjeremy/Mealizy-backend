@@ -2,6 +2,7 @@ import asyncHandler from "express-async-handler";
 import { Recipe } from "../models/Recipe.js";
 import { normalizeIngredientName } from "../utils/normalizeIngredient.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
+import { rejectUnknownFields } from "../utils/validatePayload.js";
 import {
   getRecipeById,
   importSpoonacularRecipe,
@@ -31,15 +32,37 @@ function notFound(message) {
 }
 
 function normalizeRecipePayload(body) {
+  rejectUnknownFields(body, [
+    "title",
+    "image",
+    "preparationTime",
+    "servings",
+    "ingredients",
+    "instructions",
+    "nutrition",
+    "categories",
+    "summary",
+    "description",
+    "cookingTime",
+    "readyInMinutes",
+    "requiredEquipments",
+    "diets",
+    "cuisines",
+    "tags"
+  ], "recette");
+
   const ingredients = Array.isArray(body.ingredients)
     ? body.ingredients
-        .map((ingredient) => ({
-          ingredientName: String(ingredient.ingredientName || ingredient.name || "").trim(),
-          normalizedName: normalizeIngredientName(ingredient.ingredientName || ingredient.name),
-          quantity: Number(ingredient.quantity || 0),
-          unit: normalizeUnit(ingredient.unit),
-          category: String(ingredient.category || "autres").trim().toLowerCase()
-        }))
+        .map((ingredient) => {
+          rejectUnknownFields(ingredient, ["ingredientName", "name", "quantity", "unit", "category"], "ingredient de recette");
+          return {
+            ingredientName: String(ingredient.ingredientName || ingredient.name || "").trim(),
+            normalizedName: normalizeIngredientName(ingredient.ingredientName || ingredient.name),
+            quantity: Number(ingredient.quantity || 0),
+            unit: normalizeUnit(ingredient.unit),
+            category: String(ingredient.category || "autres").trim().toLowerCase()
+          };
+        })
         .filter((ingredient) => ingredient.ingredientName && ingredient.quantity > 0)
     : [];
 

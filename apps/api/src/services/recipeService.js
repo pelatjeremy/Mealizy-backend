@@ -22,8 +22,13 @@ function clampLimit(value) {
   return Math.min(Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 12, 48);
 }
 
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function textFilter(q) {
-  return q ? { title: { $regex: String(q).trim(), $options: "i" } } : {};
+  const query = String(q || "").trim();
+  return query ? { title: { $regex: escapeRegex(query), $options: "i" } } : {};
 }
 
 function parseNumber(value) {

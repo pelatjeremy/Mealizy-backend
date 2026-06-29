@@ -15,11 +15,52 @@ import {
   setShoppingListItemChecked
 } from "../services/shoppingListService.js";
 import { getRecipeById } from "../services/recipeService.js";
+import { pickAllowedFields, rejectUnknownFields } from "../utils/validatePayload.js";
+
+const shoppingListUpdateFields = ["title", "status", "weekStartDate", "sourceRecipes", "items", "isCompleted"];
+const shoppingListItemFields = [
+  "_id",
+  "id",
+  "ingredientId",
+  "ingredientName",
+  "displayName",
+  "normalizedName",
+  "quantity",
+  "unit",
+  "standardQuantity",
+  "standardUnit",
+  "category",
+  "sourceRecipes",
+  "checked",
+  "isChecked"
+];
+const sourceRecipeFields = ["recipeId", "title"];
 
 function notFound(message) {
   const error = new Error(message);
   error.statusCode = 404;
   return error;
+}
+
+function validateSourceRecipes(sourceRecipes = [], label) {
+  if (!Array.isArray(sourceRecipes)) return;
+  for (const sourceRecipe of sourceRecipes) {
+    rejectUnknownFields(sourceRecipe, sourceRecipeFields, label);
+  }
+}
+
+function normalizeShoppingListUpdate(body) {
+  const update = pickAllowedFields(body, shoppingListUpdateFields, "liste de courses");
+  validateSourceRecipes(update.sourceRecipes, "recette source");
+
+  if (Array.isArray(update.items)) {
+    for (const item of update.items) {
+      rejectUnknownFields(item, shoppingListItemFields, "article de liste");
+      validateSourceRecipes(item.sourceRecipes, "recette source d'article");
+    }
+  }
+
+  return update;
 }
 
 export const listShoppingLists = asyncHandler(async (req, res) => {
@@ -41,8 +82,8 @@ export const generate = asyncHandler(async (req, res) => {
 export const updateShoppingList = asyncHandler(async (req, res) => {
   const list = await ShoppingList.findOneAndUpdate(
     { _id: req.params.id, userId: req.user._id },
-    req.body,
-    { new: true }
+    normalizeShoppingListUpdate(req.body),
+    { new: true, runValidators: true }
   );
   res.json(list);
 });

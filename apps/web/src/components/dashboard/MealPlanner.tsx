@@ -1,18 +1,23 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Apple, BookOpen, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, ShoppingCart, Sun, Trash2 } from "lucide-react";
+import { BookOpen, CalendarPlus, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, ShoppingCart, Sun, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { deleteMealPlan, generateMealPlanShoppingList, getMealPlans, getProfile, readAuthToken, updateMealPlan } from "@/lib/api";
+import { createMealPlan, deleteMealPlan, generateMealPlanShoppingList, getMealPlans, getProfile, getRecipeSuggestions, readAuthToken, updateMealPlan } from "@/lib/api";
 import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
-import type { MealPlan, MealType, UserProfile } from "@/types/domain";
+import type { MealPlan, MealType, Recipe, RecipeRecommendation, RecipeSuggestion, UserProfile } from "@/types/domain";
 
 const mealRows: { key: MealType; label: string; icon: typeof Coffee }[] = [
-  { key: "breakfast", label: "Petit-dejeuner", icon: Coffee },
   { key: "lunch", label: "Dejeuner", icon: Sun },
-  { key: "dinner", label: "Diner", icon: Moon },
-  { key: "snack", label: "Collation", icon: Apple }
+  { key: "dinner", label: "Diner", icon: Moon }
 ];
+
+const recommendationLabels: Record<RecipeRecommendation, string> = {
+  cook_now: "Pret a cuisiner",
+  almost_ready: "Tres recommande",
+  shopping_needed: "Il manque peu",
+  not_recommended: "Peu compatible"
+};
 
 function addWeeks(date: Date, amount: number) {
   const next = new Date(date);
@@ -46,9 +51,20 @@ function planKey(date: string, mealType: MealType) {
   return `${date}:${mealType}`;
 }
 
+function recipeId(recipe: Recipe) {
+  return recipe.externalId || recipe._id || recipe.id || "";
+}
+
+function recipeSource(recipe: Recipe): "api" | "user" | "demo" {
+  return recipe.source || (recipe.externalId?.startsWith("demo-") ? "demo" : "user");
+}
+
 function MealSlot({
   plan,
+  date,
+  mealType,
   openMenuId,
+  onAdd,
   onToggleMenu,
   onCook,
   onDelete,
@@ -56,24 +72,36 @@ function MealSlot({
   onUpdateServings
 }: {
   plan?: MealPlan;
+  date: string;
+  mealType: MealType;
   openMenuId: string | null;
+  onAdd: (date: string, mealType: MealType) => void;
   onToggleMenu: (plan: MealPlan) => void;
   onCook: (plan: MealPlan) => void;
   onDelete: (plan: MealPlan) => void;
   onViewRecipe: (plan: MealPlan) => void;
   onUpdateServings: (plan: MealPlan) => void;
 }) {
-  if (!plan) return <article className="meal-slot meal-slot-empty">Disponible</article>;
+  if (!plan) {
+    return (
+      <article className="meal-slot meal-slot-empty">
+        <button type="button" onClick={() => onAdd(date, mealType)}>
+          <CalendarPlus size={16} /> Ajouter une recette
+        </button>
+      </article>
+    );
+  }
 
   const isMenuOpen = openMenuId === plan._id;
+  const score = plan.metadata?.score;
+  const recommendation = plan.metadata?.recommendation;
 
   return (
     <article className="meal-slot planned-slot">
       {plan.recipe?.image && <img src={plan.recipe.image} alt="" />}
       <strong>{plan.recipe?.title || "Recette"}</strong>
-      <span>{plan.recipe?.preparationTime || 0} min</span>
-      <span>{plan.recipe?.calories || 0} kcal</span>
       <span>{plan.servings} portions</span>
+      {score !== undefined && <span>{score}% - {recommendation ? recommendationLabels[recommendation] : "score"}</span>}
       <div className="meal-actions">
         <button type="button" aria-label="Actions du repas" aria-expanded={isMenuOpen} onClick={() => onToggleMenu(plan)}>
           <MoreHorizontal size={16} />
@@ -91,6 +119,87 @@ function MealSlot({
   );
 }
 
+function SuggestionPicker({
+  token,
+  date,
+  mealType,
+  defaultServings,
+  onClose,
+  onCreated
+}: {
+  token: string;
+  date: string;
+  mealType: MealType;
+  defaultServings: number;
+  onClose: () => void;
+  onCreated: (plan: MealPlan) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<RecipeSuggestion[]>([]);
+  const [servings, setServings] = useState(defaultServings);
+  const [status, setStatus] = useState<"loading" | "ready" | "saving" | "error">("loading");
+
+  useEffect(() => {
+    getRecipeSuggestions(token, { limit: 8, missingMax: 2 })
+      .then((response) => {
+        setSuggestions(response.suggestions);
+        setStatus("ready");
+      })
+      .catch(() => setStatus("error"));
+  }, [token]);
+
+  async function chooseSuggestion(suggestion: RecipeSuggestion) {
+    setStatus("saving");
+    try {
+      const plan = await createMealPlan(token, {
+        date,
+        mealType,
+        recipeId: recipeId(suggestion.recipe),
+        recipeSource: recipeSource(suggestion.recipe),
+        servings,
+        metadata: {
+          score: suggestion.score,
+          recommendation: suggestion.recommendation
+        }
+      });
+      onCreated(plan);
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <section className="planning-modal meal-suggestion-modal">
+        <header>
+          <div>
+            <h2>Ajouter une recette</h2>
+            <p>{date} - {mealType === "lunch" ? "dejeuner" : "diner"}</p>
+          </div>
+          <button type="button" aria-label="Fermer" onClick={onClose}><X size={18} /></button>
+        </header>
+        <label>Portions<input min="1" type="number" value={servings} onChange={(event) => setServings(Number(event.target.value))} /></label>
+        {status === "loading" && <div className="state-panel"><Loader2 size={20} /> Chargement des suggestions</div>}
+        {status === "error" && <div className="state-panel"><CircleAlert size={20} /> Impossible de charger les suggestions.</div>}
+        {status === "ready" || status === "saving" ? (
+          <div className="meal-suggestion-list">
+            {suggestions.map((suggestion) => (
+              <button key={`${recipeId(suggestion.recipe)}-${suggestion.score}`} type="button" disabled={status === "saving"} onClick={() => chooseSuggestion(suggestion)}>
+                <span>
+                  <strong>{suggestion.recipe.title}</strong>
+                  <small>{suggestion.explanation}</small>
+                </span>
+                <em>{suggestion.score}%</em>
+                <b>{recommendationLabels[suggestion.recommendation]}</b>
+              </button>
+            ))}
+            {!suggestions.length && <p className="form-note">Aucune suggestion disponible.</p>}
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 export function MealPlanner() {
   const router = useRouter();
   const [token, setToken] = useState("");
@@ -99,13 +208,16 @@ export function MealPlanner() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [isGeneratingShoppingList, setIsGeneratingShoppingList] = useState(false);
+  const [pickerSlot, setPickerSlot] = useState<{ date: string; mealType: MealType } | null>(null);
+  const [generatedList, setGeneratedList] = useState<{ id: string; count: number } | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
   const week = formatWeekParam(weekStart);
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
 
   const visibleMeals = useMemo(() => {
     const enabled = profile?.enabledMealTypes?.length ? profile.enabledMealTypes : mealRows.map((meal) => meal.key);
-    return mealRows.filter((meal) => enabled.includes(meal.key));
+    const enabledSet = new Set(enabled);
+    return mealRows.filter((meal) => enabledSet.has(meal.key) || meal.key === "lunch" || meal.key === "dinner");
   }, [profile]);
 
   const planMap = useMemo(() => {
@@ -186,7 +298,7 @@ export function MealPlanner() {
     setIsGeneratingShoppingList(true);
     try {
       const list = await generateMealPlanShoppingList(token, week);
-      if (list._id) router.push(`/shopping-lists?id=${encodeURIComponent(list._id)}`);
+      if (list._id) setGeneratedList({ id: list._id, count: list.items.length });
     } catch {
       setStatus("error");
     } finally {
@@ -214,6 +326,14 @@ export function MealPlanner() {
           {isGeneratingShoppingList ? <Loader2 size={17} /> : <ShoppingCart size={17} />} Generer la liste
         </button>
       </div>
+      {generatedList && (
+        <div className="meal-shopping-success">
+          <span>Liste creee avec {generatedList.count} article{generatedList.count > 1 ? "s" : ""}.</span>
+          <button type="button" className="outline-action compact-action" onClick={() => router.push(`/shopping-lists?id=${encodeURIComponent(generatedList.id)}`)}>
+            Voir la liste
+          </button>
+        </div>
+      )}
 
       {status === "loading" && <div className="state-panel"><Loader2 size={22} /> Chargement du planning</div>}
       {status === "missing-token" && <div className="state-panel"><CircleAlert size={22} /> Connectez-vous pour voir votre planning.</div>}
@@ -235,7 +355,10 @@ export function MealPlanner() {
                   <MealSlot
                     key={planKey(date.key, meal.key)}
                     plan={planMap[planKey(date.key, meal.key)]}
+                    date={date.key}
+                    mealType={meal.key}
                     openMenuId={openMenuId}
+                    onAdd={(slotDate, slotMealType) => setPickerSlot({ date: slotDate, mealType: slotMealType })}
                     onToggleMenu={handleToggleMenu}
                     onCook={handleCook}
                     onDelete={handleDelete}
@@ -247,6 +370,20 @@ export function MealPlanner() {
             ))}
           </div>
         </>
+      )}
+      {pickerSlot && token && (
+        <SuggestionPicker
+          token={token}
+          date={pickerSlot.date}
+          mealType={pickerSlot.mealType}
+          defaultServings={profile?.householdSize || 2}
+          onClose={() => setPickerSlot(null)}
+          onCreated={(plan) => {
+            setPlans((items) => [...items.filter((item) => item._id !== plan._id), plan]);
+            setPickerSlot(null);
+            setGeneratedList(null);
+          }}
+        />
       )}
     </section>
   );

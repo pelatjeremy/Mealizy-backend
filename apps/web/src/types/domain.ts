@@ -210,6 +210,9 @@ export type UserProfile = {
   email: string;
   householdSize?: number;
   enabledMealTypes: MealType[];
+  availableEquipments?: string[];
+  dietaryPreferences?: string[];
+  allergies?: string[];
 };
 
 export type MealPlanDay =
@@ -242,5 +245,9 @@ export type MealPlan = {
   recipeId: string;
   recipeSource: "api" | "user" | "demo";
   servings: number;
+  metadata?: {
+    score?: number;
+    recommendation?: RecipeRecommendation;
+  };
   recipe?: MealPlanRecipe;
 };

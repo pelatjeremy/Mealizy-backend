@@ -1,6 +1,7 @@
 import asyncHandler from "express-async-handler";
 import { User } from "../models/User.js";
 import { signToken } from "../services/tokenService.js";
+import { rejectUnknownFields } from "../utils/validatePayload.js";
 
 function authError(message, statusCode = 400) {
   const error = new Error(message);
@@ -19,6 +20,20 @@ function serializeUser(user) {
 }
 
 export const register = asyncHandler(async (req, res) => {
+  rejectUnknownFields(req.body, [
+    "firstname",
+    "lastname",
+    "name",
+    "email",
+    "password",
+    "username",
+    "householdSize",
+    "enabledMealTypes",
+    "availableEquipments",
+    "dietaryPreferences",
+    "allergies"
+  ], "inscription");
+
   const firstname = String(req.body.firstname || req.body.name || "").trim();
   const lastname = String(req.body.lastname || "").trim() || "Mealizy";
   const email = String(req.body.email || "").toLowerCase().trim();
@@ -30,11 +45,16 @@ export const register = asyncHandler(async (req, res) => {
 
   try {
     const user = await User.create({
-      ...req.body,
       firstname,
       lastname,
       email,
-      password
+      password,
+      username: req.body.username,
+      householdSize: req.body.householdSize,
+      enabledMealTypes: req.body.enabledMealTypes,
+      availableEquipments: req.body.availableEquipments,
+      dietaryPreferences: req.body.dietaryPreferences,
+      allergies: req.body.allergies
     });
     res.status(201).json({ user: serializeUser(user), token: signToken(user._id) });
   } catch (error) {

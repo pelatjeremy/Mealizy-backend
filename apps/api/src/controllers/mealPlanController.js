@@ -12,6 +12,23 @@ import {
   removeWeeklyMeal,
   updateMealPlan
 } from "../services/mealPlanService.js";
+import { pickAllowedFields } from "../utils/validatePayload.js";
+
+const mealPlanWriteFields = [
+  "date",
+  "mealDate",
+  "weekStartDate",
+  "day",
+  "mealType",
+  "recipeId",
+  "recipeSource",
+  "servings",
+  "notes",
+  "status",
+  "metadata"
+];
+
+const weekCreateFields = ["start", "weekStartDate"];
 
 export const listMealPlans = asyncHandler(async (req, res) => {
   if (req.query.start || req.query.end) {
@@ -23,11 +40,11 @@ export const listMealPlans = asyncHandler(async (req, res) => {
 });
 
 export const upsertMealPlan = asyncHandler(async (req, res) => {
-  res.status(201).json(await createOrReplaceMealPlan(req.user, req.body));
+  res.status(201).json(await createOrReplaceMealPlan(req.user, pickAllowedFields(req.body, mealPlanWriteFields, "planning")));
 });
 
 export const editMealPlan = asyncHandler(async (req, res) => {
-  res.json(await updateMealPlan(req.user, req.params.id, req.body));
+  res.json(await updateMealPlan(req.user, req.params.id, pickAllowedFields(req.body, mealPlanWriteFields, "planning")));
 });
 
 export const removeMealPlan = asyncHandler(async (req, res) => {
@@ -40,15 +57,15 @@ export const weeklyMealPlan = asyncHandler(async (req, res) => {
 });
 
 export const createWeek = asyncHandler(async (req, res) => {
-  res.status(201).json(await createWeeklyMealPlan(req.user, req.body));
+  res.status(201).json(await createWeeklyMealPlan(req.user, pickAllowedFields(req.body, weekCreateFields, "semaine")));
 });
 
 export const addWeekMeal = asyncHandler(async (req, res) => {
-  res.status(201).json(await addMealToWeeklyPlan(req.user, req.params.id, req.body));
+  res.status(201).json(await addMealToWeeklyPlan(req.user, req.params.id, pickAllowedFields(req.body, mealPlanWriteFields, "planning")));
 });
 
 export const moveWeekMeal = asyncHandler(async (req, res) => {
-  res.json(await moveWeeklyMeal(req.user, req.params.id, req.params.mealId, req.body));
+  res.json(await moveWeeklyMeal(req.user, req.params.id, req.params.mealId, pickAllowedFields(req.body, mealPlanWriteFields, "planning")));
 });
 
 export const removeWeekMeal = asyncHandler(async (req, res) => {

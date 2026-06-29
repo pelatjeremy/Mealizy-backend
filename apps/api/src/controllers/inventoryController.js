@@ -2,6 +2,10 @@ import asyncHandler from "express-async-handler";
 import { InventoryItem } from "../models/InventoryItem.js";
 import { findOrCreateIngredient } from "../services/ingredientService.js";
 import { normalizeUnit } from "../utils/unitConversion.js";
+import { pickAllowedFields, rejectUnknownFields } from "../utils/validatePayload.js";
+
+const inventoryCreateFields = ["name", "category", "quantity", "unit", "expirationDate"];
+const inventoryUpdateFields = ["name", "category", "quantity", "unit", "expirationDate"];
 
 async function backfillNormalizedNames(items) {
   await Promise.all(items.map(async (item) => {
@@ -18,6 +22,7 @@ export const listInventory = asyncHandler(async (req, res) => {
 });
 
 export const createInventoryItem = asyncHandler(async (req, res) => {
+  rejectUnknownFields(req.body, inventoryCreateFields, "inventaire");
   const ingredient = await findOrCreateIngredient({ name: req.body.name, category: req.body.category });
   const item = await InventoryItem.create({
     userId: req.user._id,
@@ -31,7 +36,7 @@ export const createInventoryItem = asyncHandler(async (req, res) => {
 });
 
 export const updateInventoryItem = asyncHandler(async (req, res) => {
-  const update = { ...req.body };
+  const update = pickAllowedFields(req.body, inventoryUpdateFields, "inventaire");
   if (update.unit) update.unit = normalizeUnit(update.unit);
   if (req.body.name) {
     const ingredient = await findOrCreateIngredient({ name: req.body.name, category: req.body.category });
