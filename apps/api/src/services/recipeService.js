@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { demoRecipes } from "../data/demoRecipes.js";
 import { Recipe } from "../models/Recipe.js";
 import { User } from "../models/User.js";
+import { ingredientCategories } from "../data/catalogCategories.js";
 import {
   fetchSpoonacularRecipeById,
   SpoonacularApiError
@@ -9,6 +10,22 @@ import {
 import { normalizeRecipeIngredient } from "./ingredientMatcher.js";
 
 const demoEmail = "demo@mealizy.app";
+const demoTitlePattern = /^(dashboard|demo|seed|test)\b/i;
+const recipeCategoryAliases = {
+  viande: ["viandes-poissons", "viandes", "meat"],
+  volaille: ["viandes-poissons", "volaille", "chicken"],
+  poisson: ["viandes-poissons", "poissons", "fish"],
+  "fruits-de-mer": ["viandes-poissons", "fruits-de-mer", "seafood"],
+  legumes: ["fruits-legumes", "legumes", "vegetables"],
+  feculents: ["epicerie", "feculents", "pasta", "rice"],
+  vegetarien: ["vegetarian"],
+  vegan: ["vegan"],
+  dessert: ["dessert", "desserts"],
+  "petit-dejeuner": ["breakfast"],
+  entree: ["starter", "appetizer"],
+  "plat-principal": ["main-course", "main course"],
+  accompagnement: ["side-dish", "side dish"]
+};
 
 export { SpoonacularApiError };
 
@@ -44,8 +61,63 @@ function splitFilter(value) {
     .filter(Boolean);
 }
 
+function normalizeFilterValue(value = "") {
+  return String(value)
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " et ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function categoryFilterValues(value) {
+  const values = splitFilter(value);
+  const expanded = new Set();
+
+  for (const rawValue of values) {
+    const normalized = normalizeFilterValue(rawValue);
+    if (!normalized) continue;
+    expanded.add(rawValue);
+    expanded.add(normalized);
+    for (const alias of recipeCategoryAliases[normalized] || []) expanded.add(alias);
+
+    for (const category of ingredientCategories) {
+      const candidates = [category.id, category.label, ...(category.aliases || []), ...(category.subcategories || []).flatMap((subcategory) => [subcategory.id, subcategory.label])];
+      if (candidates.map(normalizeFilterValue).includes(normalized)) {
+        expanded.add(category.id);
+        expanded.add(category.label);
+        for (const alias of category.aliases || []) expanded.add(alias);
+        for (const subcategory of category.subcategories || []) {
+          expanded.add(subcategory.id);
+          expanded.add(subcategory.label);
+        }
+      }
+    }
+  }
+
+  return [...expanded].filter(Boolean);
+}
+
+function excludeDemoAndTestRecipes(query) {
+  query.$and = [
+    ...(query.$and || []),
+    {
+      $nor: [
+        { source: "demo" },
+        { sourceProvider: "demo" },
+        { externalId: { $regex: /^demo-/i } },
+        { title: { $regex: demoTitlePattern } },
+        { tags: { $in: ["demo", "test", "dev", "seed"] } }
+      ]
+    }
+  ];
+  return query;
+}
+
 function applyMongoFilters(query, filters = {}) {
-  const categories = splitFilter(filters.category);
+  const categories = categoryFilterValues(filters.category || filters.categories || filters.type);
   if (categories.length) {
     query.$or = [
       ...(query.$or || []),
@@ -92,6 +164,7 @@ export async function listRecipes({ q, page, limit, source = "all", user, filter
   const currentLimit = clampLimit(limit);
   const skip = (currentPage - 1) * currentLimit;
   const query = applyMongoFilters(textFilter(q), filters);
+  const includeDemo = filters.includeDemo === "true" || filters.includeDemo === true;
 
   if (source === "mine") {
     if (!user?._id) return { items: [], total: 0, page: currentPage, limit: currentLimit, source };
@@ -100,6 +173,7 @@ export async function listRecipes({ q, page, limit, source = "all", user, filter
   }
 
   if (source === "mealizy") {
+    if (!includeDemo && process.env.NODE_ENV === "production") return { items: [], total: 0, page: currentPage, limit: currentLimit, source };
     const demoUser = await getDemoUser();
     if (!demoUser) return { items: [], total: 0, page: currentPage, limit: currentLimit, source };
     query.userId = demoUser._id;
@@ -111,6 +185,7 @@ export async function listRecipes({ q, page, limit, source = "all", user, filter
   }
 
   if (source === "user") query.source = "user";
+  if (!includeDemo && source !== "mealizy") excludeDemoAndTestRecipes(query);
 
   const [items, total] = await Promise.all([
     Recipe.find(query).sort({ createdAt: -1, title: 1 }).skip(skip).limit(currentLimit).lean(),

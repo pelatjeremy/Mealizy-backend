@@ -15,6 +15,10 @@ export const demoUserSeed = {
 };
 
 export async function seedDemoRecipes() {
+  if (process.env.NODE_ENV === "production" && !process.argv.includes("--allow-production")) {
+    throw new Error("seed:demo-recipes is disabled in production. Use --allow-production only for an isolated demo database.");
+  }
+
   const password = crypto.randomBytes(24).toString("hex");
   const demoUser = await User.findOneAndUpdate(
     { email: demoUserSeed.email },

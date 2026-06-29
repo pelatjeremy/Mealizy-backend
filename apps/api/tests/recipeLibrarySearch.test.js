@@ -63,3 +63,18 @@ test("recipe library API source searches synced MongoDB recipes only", async () 
   }
 });
 
+test("recipe library category filter accepts frontend labels", async () => {
+  const stub = stubRecipeList();
+
+  try {
+    await searchRecipeLibrary({ source: "all", filters: { category: "Viande" } });
+
+    const categoryOr = stub.calls.findQuery.$or || [];
+    assert.ok(categoryOr.some((entry) => entry.categories?.$in?.includes("viandes-poissons")));
+    assert.ok(categoryOr.some((entry) => entry["ingredients.category"]?.$in?.includes("viandes-poissons")));
+    assert.ok(stub.calls.findQuery.$and[0].$nor.some((entry) => entry.source === "demo"));
+  } finally {
+    stub.restore();
+  }
+});
+

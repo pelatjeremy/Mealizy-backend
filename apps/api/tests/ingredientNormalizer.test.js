@@ -48,7 +48,7 @@ test("matcher creates an unknown ingredient with normalized canonical fields", a
 
   try {
     const ingredient = await matchOrCreateIngredient("Fresh tomatoes", { spoonacularId: 123 });
-    assert.equal(ingredient.name, "tomate");
+    assert.equal(ingredient.name, "Fresh tomatoes");
     assert.equal(ingredient.normalizedName, "tomate");
     assert.equal(ingredient.category, "autres");
     assert.equal(ingredient.source, "external");

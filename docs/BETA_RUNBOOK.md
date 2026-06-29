@@ -63,7 +63,10 @@ Cette checklist doit etre terminee avant d'envoyer le lien aux beta testeurs.
 
 ### Seed minimal
 
-- [ ] Quelques recettes de demonstration ou synchronisees sont disponibles.
+- [ ] Le dry-run de nettoyage beta a ete relu: `corepack yarn workspace @mealizy/api cleanup:beta-data --dry-run`.
+- [ ] Les recettes de demonstration/test ont ete supprimees si necessaire avec `--execute`.
+- [ ] Les recettes visibles en beta viennent de Spoonacular ou de vrais utilisateurs, pas de `seed:demo-recipes`.
+- [ ] Quelques recettes synchronisees sont disponibles via `corepack yarn workspace @mealizy/api sync:recipes --query=pasta --limit=20`.
 - [ ] Le catalogue d'ingredients contient les categories et unites principales.
 - [ ] Le parcours fonctionne meme avec un inventaire vide.
 

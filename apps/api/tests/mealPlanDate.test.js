@@ -327,6 +327,27 @@ test("adds a recipe to a weekly meal plan", async () => {
   }
 });
 
+test("adds a recipe to any selected date in the displayed week", async () => {
+  const restoreRecipe = stubRecipeLookup();
+  const mealPlan = stubMealPlanWrite();
+
+  try {
+    const result = await addMealToWeeklyPlan(user, "2026-06-22", {
+      date: "2026-06-26",
+      mealType: "lunch",
+      recipeId: "recipe-id",
+      recipeSource: "api"
+    });
+
+    assert.equal(result.date, "2026-06-26");
+    assert.equal(result.day, "friday");
+    assert.equal(mealPlan.calls[0].update.mealDate.toISOString().slice(0, 10), "2026-06-26");
+  } finally {
+    mealPlan.restore();
+    restoreRecipe();
+  }
+});
+
 test("removes a meal from a weekly meal plan with user isolation", async () => {
   const mealPlan = stubMealPlanDelete();
 

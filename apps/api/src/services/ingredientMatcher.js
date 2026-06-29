@@ -59,7 +59,7 @@ export async function findIngredientByComparableName(comparableName) {
 }
 
 async function createUnknownIngredient(rawName, comparableName, metadata = {}) {
-  const displayName = String(comparableName || rawName || "Ingredient").trim();
+  const displayName = String(rawName || metadata.nameClean || metadata.originalName || metadata.spoonacularName || comparableName || "Ingredient").trim();
   const slug = slugify(comparableName || displayName);
   const aliases = compactStringList([displayName, metadata.originalName, metadata.nameClean, metadata.spoonacularName]);
 

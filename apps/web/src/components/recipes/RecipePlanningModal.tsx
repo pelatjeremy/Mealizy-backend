@@ -37,18 +37,22 @@ export function RecipePlanningModal({
   recipe,
   profile,
   token,
+  initialDate,
+  initialMealType,
   onClose
 }: {
   recipe: Recipe;
   profile: UserProfile | null;
   token: string;
+  initialDate?: string;
+  initialMealType?: MealType;
   onClose: () => void;
 }) {
   const profileMealTypes = asArray<MealType>(profile?.enabledMealTypes);
   const enabledMealTypes = profileMealTypes.length ? profileMealTypes : mealTypes.map((meal) => meal.key);
   const visibleMealTypes = mealTypes.filter((meal) => enabledMealTypes.includes(meal.key));
-  const [date, setDate] = useState(todayParam);
-  const [mealType, setMealType] = useState<MealType>(visibleMealTypes[0]?.key || "lunch");
+  const [date, setDate] = useState(initialDate || todayParam);
+  const [mealType, setMealType] = useState<MealType>(initialMealType || visibleMealTypes[0]?.key || "lunch");
   const [servings, setServings] = useState(profile?.householdSize || recipe.servings || 1);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");

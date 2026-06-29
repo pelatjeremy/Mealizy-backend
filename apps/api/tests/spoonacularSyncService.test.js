@@ -129,3 +129,49 @@ test("spoonacular sync reports invalid API key without throwing technical errors
   }
 });
 
+test("spoonacular sync ignores duplicate recipe ids from one batch", async () => {
+  const restoreKey = withSpoonacularKey();
+  const restoreIngredients = stubIngredientMatcher();
+  const recipeStub = stubRecipeWrites();
+  const restoreFetch = withFetch(async (url) => {
+    const value = String(url);
+    if (value.includes("complexSearch")) {
+      return new Response(JSON.stringify({ totalResults: 2, results: [{ id: 42, title: "Pasta" }, { id: 42, title: "Pasta duplicate" }] }), {
+        status: 200
+      });
+    }
+
+    return new Response(JSON.stringify([
+      {
+        id: 42,
+        title: "Pasta",
+        readyInMinutes: 20,
+        servings: 2,
+        extendedIngredients: [{ id: 1, name: "tomatoes", amount: 2, unit: "" }],
+        nutrition: { nutrients: [] }
+      },
+      {
+        id: 42,
+        title: "Pasta duplicate",
+        readyInMinutes: 20,
+        servings: 2,
+        extendedIngredients: [],
+        nutrition: { nutrients: [] }
+      }
+    ]), { status: 200 });
+  });
+
+  try {
+    const report = await syncSpoonacularCatalog({ q: "pasta", limit: 2, logger: { warn() {}, error() {} } });
+
+    assert.equal(report.analyzedRecipes, 1);
+    assert.equal(report.duplicatesIgnored, 1);
+    assert.equal(recipeStub.calls.findOneAndUpdate.length, 1);
+  } finally {
+    restoreFetch();
+    recipeStub.restore();
+    restoreIngredients();
+    restoreKey();
+  }
+});
+
