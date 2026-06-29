@@ -18,7 +18,10 @@ const mealPlanSchema = new mongoose.Schema(
     recipeId: { type: String, required: true },
     recipeSource: { type: String, enum: recipeSources, required: true },
     recipeSnapshot: { type: mongoose.Schema.Types.Mixed },
-    servings: { type: Number, required: true, min: 1 }
+    servings: { type: Number, required: true, min: 1 },
+    notes: { type: String, default: "" },
+    status: { type: String, enum: ["planned", "cooked", "skipped"], default: "planned", index: true },
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
   },
   { timestamps: true }
 );

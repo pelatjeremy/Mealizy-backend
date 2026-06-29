@@ -1,9 +1,9 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Apple, BookOpen, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, Sun, Trash2 } from "lucide-react";
+import { Apple, BookOpen, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, ShoppingCart, Sun, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { deleteMealPlan, getMealPlans, getProfile, readAuthToken, updateMealPlan } from "@/lib/api";
+import { deleteMealPlan, generateMealPlanShoppingList, getMealPlans, getProfile, readAuthToken, updateMealPlan } from "@/lib/api";
 import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
 import type { MealPlan, MealType, UserProfile } from "@/types/domain";
 
@@ -98,6 +98,7 @@ export function MealPlanner() {
   const [plans, setPlans] = useState<MealPlan[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
+  const [isGeneratingShoppingList, setIsGeneratingShoppingList] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
   const week = formatWeekParam(weekStart);
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
@@ -180,6 +181,19 @@ export function MealPlanner() {
     handleViewRecipe(plan);
   }
 
+  async function handleGenerateShoppingList() {
+    if (!token) return;
+    setIsGeneratingShoppingList(true);
+    try {
+      const list = await generateMealPlanShoppingList(token, week);
+      if (list._id) router.push(`/shopping-lists?id=${encodeURIComponent(list._id)}`);
+    } catch {
+      setStatus("error");
+    } finally {
+      setIsGeneratingShoppingList(false);
+    }
+  }
+
   return (
     <section className="panel meal-panel">
       <div className="panel-header">
@@ -195,6 +209,9 @@ export function MealPlanner() {
         </div>
         <button type="button" className="outline-action compact-action" onClick={() => setWeekStart(getWeekStart())}>
           Semaine actuelle
+        </button>
+        <button type="button" className="primary-action compact-action" disabled={!plans.length || isGeneratingShoppingList} onClick={handleGenerateShoppingList}>
+          {isGeneratingShoppingList ? <Loader2 size={17} /> : <ShoppingCart size={17} />} Generer la liste
         </button>
       </div>
 

@@ -205,6 +205,14 @@ export async function deleteMealPlan(token: string, id: string) {
   });
 }
 
+export async function generateMealPlanShoppingList(token: string, weekStart: string) {
+  const list = await request<ShoppingList>(`/meal-plans/${encodeURIComponent(weekStart)}/shopping-list`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return normalizeShoppingList(list);
+}
+
 function normalizeShoppingList(list: ShoppingList): ShoppingList {
   return {
     ...list,

@@ -98,6 +98,30 @@ function buildRecipeSnapshot(recipe) {
   };
 }
 
+function scaleRecipeForPlan(plan) {
+  const recipe = plan.recipeSnapshot;
+  const recipeServings = Math.max(Number(recipe?.servings || 1), 1);
+  const plannedServings = Math.max(Number(plan.servings || recipeServings), 1);
+  const scale = plannedServings / recipeServings;
+
+  return {
+    ...recipe,
+    _id: recipe?.id || plan.recipeId,
+    id: recipe?.id || plan.recipeId,
+    source: recipe?.source || plan.recipeSource,
+    title: recipe?.title || "Recette",
+    servings: plannedServings,
+    ingredients: (recipe?.ingredients || []).map((ingredient) => ({
+      ...ingredient,
+      quantity: Math.round(Number(ingredient.quantity || 0) * scale * 100) / 100,
+      amount: ingredient.amount !== undefined ? Math.round(Number(ingredient.amount || 0) * scale * 100) / 100 : ingredient.amount,
+      standardAmount: ingredient.standardAmount !== undefined
+        ? Math.round(Number(ingredient.standardAmount || 0) * scale * 100) / 100
+        : ingredient.standardAmount
+    }))
+  };
+}
+
 function serializeMealPlan(plan, recipe) {
   const obj = plan.toObject ? plan.toObject() : plan;
   const mealDate = obj.mealDate || dateFromLegacySlot(obj.weekStartDate, obj.day);
@@ -193,7 +217,10 @@ export async function createOrReplaceMealPlan(user, payload) {
       recipeId: payload.recipeId,
       recipeSource: payload.recipeSource,
       recipeSnapshot: buildRecipeSnapshot(recipe),
-      servings
+      servings,
+      notes: payload.notes || "",
+      status: payload.status || "planned",
+      metadata: payload.metadata || {}
     },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
@@ -219,6 +246,23 @@ export async function updateMealPlan(user, id, payload) {
     existing.servings = resolveServings(payload.servings, user, recipe || {});
   }
 
+  if (payload.date || payload.mealDate || payload.weekStartDate || payload.day || payload.mealType) {
+    const mealDate = payload.date || payload.mealDate
+      ? normalizeDateOnly(payload.date || payload.mealDate, "date")
+      : payload.day
+        ? dateFromLegacySlot(existing.weekStartDate, payload.day)
+        : existing.mealDate || dateFromLegacySlot(existing.weekStartDate, existing.day);
+    existing.mealDate = mealDate;
+    existing.weekStartDate = weekStartFromDate(mealDate);
+    existing.day = dayFromDate(mealDate);
+    existing.mealType = payload.mealType || existing.mealType;
+    validateSlot({ mealType: existing.mealType });
+  }
+
+  if (payload.notes !== undefined) existing.notes = String(payload.notes || "");
+  if (payload.status !== undefined) existing.status = payload.status;
+  if (payload.metadata !== undefined) existing.metadata = payload.metadata;
+
   await existing.save();
   return serializeMealPlan(existing, recipe);
 }
@@ -226,4 +270,63 @@ export async function updateMealPlan(user, id, payload) {
 export async function deleteMealPlan(user, id) {
   const result = await MealPlan.deleteOne({ _id: id, userId: user._id });
   if (!result.deletedCount) throw notFound("Meal plan not found");
+}
+
+export async function getWeeklyMealPlan(user, start) {
+  const weekStartDate = normalizeWeekStartDate(start);
+  const meals = await listMealPlansForWeek(user, formatDateOnly(weekStartDate));
+
+  return {
+    id: formatDateOnly(weekStartDate),
+    userId: String(user._id),
+    weekStartDate: formatDateOnly(weekStartDate),
+    status: meals.length ? "active" : "empty",
+    people: Number(user.householdSize || 1),
+    meals,
+    metadata: {
+      mealCount: meals.length
+    }
+  };
+}
+
+export async function createWeeklyMealPlan(user, payload = {}) {
+  return getWeeklyMealPlan(user, payload.start || payload.weekStartDate);
+}
+
+export async function addMealToWeeklyPlan(user, weekId, payload) {
+  const weekStartDate = normalizeWeekStartDate(weekId);
+  const date = payload.date || dateFromLegacySlot(weekStartDate, payload.day || "monday");
+  const meal = await createOrReplaceMealPlan(user, {
+    ...payload,
+    date: typeof date === "string" ? date : formatDateOnly(date)
+  });
+  return meal;
+}
+
+export async function moveWeeklyMeal(user, _weekId, mealId, payload) {
+  return updateMealPlan(user, mealId, payload);
+}
+
+export async function removeWeeklyMeal(user, _weekId, mealId) {
+  return deleteMealPlan(user, mealId);
+}
+
+export async function generateShoppingListFromWeeklyMealPlan(user, weekId) {
+  const weekStartDate = normalizeWeekStartDate(weekId);
+  const plans = await MealPlan.find({ userId: user._id, weekStartDate }).lean();
+  if (!plans.length) throw badRequest("Aucun repas planifie pour cette semaine");
+
+  const recipes = [];
+  for (const plan of plans) {
+    const recipeSnapshot = plan.recipeSnapshot || await getRecipeById(plan.recipeId, plan.recipeSource);
+    if (!recipeSnapshot) continue;
+    recipes.push(scaleRecipeForPlan({ ...plan, recipeSnapshot }));
+  }
+
+  if (!recipes.length) throw notFound("No recipes found for this meal plan");
+
+  const { createShoppingListFromRecipes } = await import("./shoppingListService.js");
+  return createShoppingListFromRecipes(user, recipes, {
+    title: `Courses semaine ${formatDateOnly(weekStartDate)}`
+  });
 }
