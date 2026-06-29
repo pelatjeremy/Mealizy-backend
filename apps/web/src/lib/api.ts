@@ -166,9 +166,10 @@ export async function register(payload: { firstname: string; lastname: string; e
 }
 
 export async function getProfile(token: string) {
-  return request<UserProfile>("/users/profile", {
+  const response = await request<unknown>("/users/profile", {
     headers: { Authorization: `Bearer ${token}` }
   });
+  return normalizeUserProfile(response);
 }
 
 export async function updateProfile(token: string, payload: {
@@ -180,11 +181,28 @@ export async function updateProfile(token: string, payload: {
   dietaryPreferences?: string[];
   allergies?: string[];
 }) {
-  return request<UserProfile>("/users/profile", {
+  const response = await request<unknown>("/users/profile", {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload)
   });
+  return normalizeUserProfile(response);
+}
+
+export function normalizeUserProfile(response: unknown): UserProfile {
+  const value = asRecord(response);
+  return {
+    ...(value as UserProfile),
+    _id: String(value._id || ""),
+    firstname: String(value.firstname || ""),
+    lastname: String(value.lastname || ""),
+    email: String(value.email || ""),
+    householdSize: Number(value.householdSize || 1),
+    enabledMealTypes: asArray<MealType>(value.enabledMealTypes),
+    availableEquipments: asArray<string>(value.availableEquipments),
+    dietaryPreferences: asArray<string>(value.dietaryPreferences),
+    allergies: asArray<string>(value.allergies)
+  };
 }
 
 export async function getInventory(token: string) {

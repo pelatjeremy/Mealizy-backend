@@ -48,7 +48,7 @@ export function RecipeFormModal({
   const [image, setImage] = useState(recipe?.image || "");
   const [preparationTime, setPreparationTime] = useState(String(recipe?.preparationTime || 20));
   const [servings, setServings] = useState(String(recipe?.servings || 2));
-  const [instructions, setInstructions] = useState((recipe?.instructions || []).join("\n"));
+  const [instructions, setInstructions] = useState(asArray<string>(recipe?.instructions).join("\n"));
   const [ingredients, setIngredients] = useState<IngredientDraft[]>(() => recipeIngredientDrafts(recipe));
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [error, setError] = useState("");

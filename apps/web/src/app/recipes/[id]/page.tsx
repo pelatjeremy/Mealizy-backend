@@ -262,9 +262,9 @@ export default function RecipeDetailPage() {
               <h3>Informations</h3>
               <dl className="nutrition-list">
                 <div><dt>Source</dt><dd>{recipe.sourceProvider || recipe.source || "Mealizy"}</dd></div>
-                <div><dt>Cuisines</dt><dd>{recipe.cuisines?.join(", ") || "Non renseigne"}</dd></div>
-                <div><dt>Regimes</dt><dd>{recipe.diets?.join(", ") || "Non renseigne"}</dd></div>
-                <div><dt>Categories</dt><dd>{recipe.categories?.join(", ") || "Non renseigne"}</dd></div>
+                <div><dt>Cuisines</dt><dd>{asArray<string>(recipe.cuisines).join(", ") || "Non renseigne"}</dd></div>
+                <div><dt>Regimes</dt><dd>{asArray<string>(recipe.diets).join(", ") || "Non renseigne"}</dd></div>
+                <div><dt>Categories</dt><dd>{asArray<string>(recipe.categories).join(", ") || "Non renseigne"}</dd></div>
               </dl>
             </div>
           </section>

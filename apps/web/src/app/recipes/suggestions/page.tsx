@@ -153,7 +153,7 @@ export default function RecipeSuggestionsPage() {
 
   function updateSelectedRecipe(recipe: Recipe, selected: boolean) {
     const id = recipeId(recipe);
-    setSelectedRecipeIds((current) => selected ? [...new Set([...current, id])] : current.filter((value) => value !== id));
+    setSelectedRecipeIds((current) => selected ? [...new Set([...asArray<string>(current), id])] : asArray<string>(current).filter((value) => value !== id));
   }
 
   function createSelectedShoppingList() {
