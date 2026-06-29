@@ -1,8 +1,9 @@
 import { Info, ShieldCheck, Sparkles } from "lucide-react";
+import { asArray } from "@/lib/api";
 import { Recipe } from "@/types/domain";
 
 function group(recipes: Recipe[], missingCount: number) {
-  return (Array.isArray(recipes) ? recipes : []).filter((recipe) => (recipe.missingCount || 0) === missingCount).slice(0, 3);
+  return asArray<Recipe>(recipes).filter((recipe) => (recipe.missingCount || 0) === missingCount).slice(0, 3);
 }
 
 export function RecipeSuggestions({ recipes }: { recipes: Recipe[] }) {

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { CalendarPlus, X } from "lucide-react";
-import { createMealPlan, getApiErrorMessage } from "@/lib/api";
+import { asArray, createMealPlan, getApiErrorMessage } from "@/lib/api";
 import { formatWeekParam } from "@/components/shopping/WeekSelector";
 import type { MealType, Recipe, UserProfile } from "@/types/domain";
 
@@ -44,7 +44,8 @@ export function RecipePlanningModal({
   token: string;
   onClose: () => void;
 }) {
-  const enabledMealTypes = profile?.enabledMealTypes?.length ? profile.enabledMealTypes : mealTypes.map((meal) => meal.key);
+  const profileMealTypes = asArray<MealType>(profile?.enabledMealTypes);
+  const enabledMealTypes = profileMealTypes.length ? profileMealTypes : mealTypes.map((meal) => meal.key);
   const visibleMealTypes = mealTypes.filter((meal) => enabledMealTypes.includes(meal.key));
   const [date, setDate] = useState(todayParam);
   const [mealType, setMealType] = useState<MealType>(visibleMealTypes[0]?.key || "lunch");

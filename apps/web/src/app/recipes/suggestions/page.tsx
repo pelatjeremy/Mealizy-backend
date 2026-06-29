@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarPlus, CircleAlert, Loader2, Search, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { createShoppingListFromRecipes, getProfile, getRecipeSuggestions, readAuthToken } from "@/lib/api";
+import { asArray, createShoppingListFromRecipes, getProfile, getRecipeSuggestions, readAuthToken } from "@/lib/api";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import type { Recipe, RecipeRecommendation, RecipeSuggestion, RecipeSuggestionGroup, RecipeSuggestionResponse, UserProfile } from "@/types/domain";
 import { PageScaffold } from "@/components/ui/PageScaffold";
@@ -69,7 +69,7 @@ function RecipeCard({
   onPlan: (recipe: Recipe) => void;
 }) {
   const recipe = suggestion.recipe;
-  const missing = [...suggestion.missingIngredients, ...suggestion.partialIngredients];
+  const missing = [...asArray<string>(suggestion.missingIngredients), ...asArray<string>(suggestion.partialIngredients)];
 
   return (
     <article className="suggestion-card">
@@ -118,7 +118,7 @@ export default function RecipeSuggestionsPage() {
   const [isCreatingShoppingList, setIsCreatingShoppingList] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
 
-  const suggestions = Array.isArray(response.suggestions) ? response.suggestions : [];
+  const suggestions = asArray<RecipeSuggestion>(response.suggestions);
   const groups = response.groups || emptyResponse.groups;
   const topSuggestion = useMemo(() => suggestions[0], [suggestions]);
 
@@ -215,7 +215,7 @@ export default function RecipeSuggestionsPage() {
           </section>
 
           {(["readyToCook", "highlyRecommended", "missingFewIngredients", "lowCompatibility"] as RecipeSuggestionGroup[]).map((group) => {
-            const groupSuggestions = Array.isArray(groups[group]) ? groups[group] : [];
+            const groupSuggestions = asArray<RecipeSuggestion>(groups[group]);
             if (!groupSuggestions.length) return null;
             return (
               <section className="suggestion-group-section" key={group}>

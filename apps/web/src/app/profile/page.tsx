@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CircleAlert, Loader2, Save } from "lucide-react";
-import { getApiErrorMessage, getProfile, readAuthToken, updateProfile } from "@/lib/api";
+import { asArray, getApiErrorMessage, getProfile, readAuthToken, updateProfile } from "@/lib/api";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 import type { MealType, UserProfile } from "@/types/domain";
 
@@ -19,7 +19,8 @@ type Status = "loading" | "ready" | "missing-token" | "error";
 type Notice = { text: string; tone: "success" | "error" };
 
 function toggleValue<T extends string>(values: T[], value: T, checked: boolean) {
-  return checked ? [...new Set([...values, value])] : values.filter((item) => item !== value);
+  const safeValues = asArray<T>(values);
+  return checked ? [...new Set([...safeValues, value])] : safeValues.filter((item) => item !== value);
 }
 
 export default function ProfilePage() {
@@ -55,8 +56,8 @@ export default function ProfilePage() {
         firstname: profile.firstname,
         lastname: profile.lastname,
         householdSize: Math.max(Number(profile.householdSize || 1), 1),
-        enabledMealTypes: profile.enabledMealTypes,
-        availableEquipments: profile.availableEquipments || []
+        enabledMealTypes: asArray<MealType>(profile.enabledMealTypes),
+        availableEquipments: asArray<string>(profile.availableEquipments)
       });
       setProfile(savedProfile);
       setNotice({ text: "Profil mis a jour.", tone: "success" });
@@ -100,11 +101,11 @@ export default function ProfilePage() {
               {mealTypes.map((item) => (
                 <label key={item.value}>
                   <input
-                    checked={(profile.enabledMealTypes || []).includes(item.value)}
+                    checked={asArray<MealType>(profile.enabledMealTypes).includes(item.value)}
                     type="checkbox"
                     onChange={(event) => setProfile({
                       ...profile,
-                      enabledMealTypes: toggleValue(profile.enabledMealTypes || [], item.value, event.target.checked)
+                      enabledMealTypes: toggleValue(asArray<MealType>(profile.enabledMealTypes), item.value, event.target.checked)
                     })}
                   />
                   {item.label}
@@ -118,11 +119,11 @@ export default function ProfilePage() {
               {equipments.map((item) => (
                 <label key={item}>
                   <input
-                    checked={(profile.availableEquipments || []).includes(item)}
+                    checked={asArray<string>(profile.availableEquipments).includes(item)}
                     type="checkbox"
                     onChange={(event) => setProfile({
                       ...profile,
-                      availableEquipments: toggleValue(profile.availableEquipments || [], item, event.target.checked)
+                      availableEquipments: toggleValue(asArray<string>(profile.availableEquipments), item, event.target.checked)
                     })}
                   />
                   {item}

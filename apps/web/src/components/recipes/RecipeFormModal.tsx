@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { Plus, Save, Trash2, X } from "lucide-react";
-import { createRecipe, getApiErrorMessage, updateRecipe } from "@/lib/api";
+import { asArray, createRecipe, getApiErrorMessage, updateRecipe } from "@/lib/api";
 import type { Recipe } from "@/types/domain";
 
 type IngredientDraft = {
@@ -21,8 +21,9 @@ function emptyIngredient(id: number): IngredientDraft {
 }
 
 function recipeIngredientDrafts(recipe?: Recipe): IngredientDraft[] {
-  if (!recipe?.ingredients?.length) return [emptyIngredient(1), emptyIngredient(2)];
-  return recipe.ingredients.map((ingredient, index) => ({
+  const ingredients = asArray<Recipe["ingredients"][number]>(recipe?.ingredients);
+  if (!ingredients.length) return [emptyIngredient(1), emptyIngredient(2)];
+  return ingredients.map((ingredient, index) => ({
     id: index + 1,
     ingredientName: ingredient.ingredientName || "",
     quantity: String(ingredient.quantity || ""),

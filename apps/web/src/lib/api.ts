@@ -6,7 +6,7 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function asArray<T>(value: unknown): T[] {
+export function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
 }
 
@@ -51,7 +51,7 @@ export async function getRecipeSuggestions(token: string, params: Record<string,
   const response = await request<unknown>(`/recipes/suggestions?${query.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  return normalizeRecipeSuggestionResponse(response);
+  return normalizeSuggestionsResponse(response);
 }
 
 export async function getRecipeCatalog(token: string, params: Record<string, string | number | undefined>) {
@@ -63,7 +63,7 @@ export async function getRecipeCatalog(token: string, params: Record<string, str
   const response = await request<unknown>(`/recipes/catalog?${query.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  return normalizeRecipeCatalogResponse(response, readCatalogSource(String(params.source || "all")));
+  return normalizeRecipesResponse(response, readCatalogSource(String(params.source || "all")));
 }
 
 export async function createRecipe(token: string, payload: {
@@ -191,14 +191,16 @@ export async function getInventory(token: string) {
   const response = await request<unknown>("/inventory", {
     headers: { Authorization: `Bearer ${token}` }
   });
-  return asArray<InventoryItem>(response);
+  const value = asRecord(response);
+  return asArray<InventoryItem>(Array.isArray(response) ? response : value.items);
 }
 
 export async function getMealPlans(token: string, week: string) {
   const response = await request<unknown>(`/meal-plans?week=${encodeURIComponent(week)}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  return asArray<MealPlan>(response);
+  const value = asRecord(response);
+  return asArray<MealPlan>(Array.isArray(response) ? response : value.items || value.meals);
 }
 
 export async function createMealPlan(
@@ -245,22 +247,26 @@ export async function generateMealPlanShoppingList(token: string, weekStart: str
 function normalizeShoppingList(list: unknown): ShoppingList {
   const value = asRecord(list);
   const items = asArray<ShoppingList["items"][number]>(value.items);
+  const sourceRecipes = asArray<NonNullable<ShoppingList["sourceRecipes"]>[number]>(value.sourceRecipes);
   return {
     ...(value as ShoppingList),
+    sourceRecipes,
     items: items.map((item) => ({
       ...item,
-      id: item.id || item._id || ""
+      id: item.id || item._id || "",
+      sourceRecipes: asArray(item.sourceRecipes)
     }))
   };
 }
 
-function normalizeRecipeCatalogResponse(response: unknown, source: RecipeCatalogSource): RecipeCatalogResponse {
+export function normalizeRecipesResponse(response: unknown, source: RecipeCatalogSource = "all"): RecipeCatalogResponse {
   if (Array.isArray(response)) {
-    return { items: response as Recipe[], total: response.length, page: 1, limit: response.length, source };
+    const items = response as Recipe[];
+    return { items, total: items.length, page: 1, limit: items.length, source };
   }
 
   const value = asRecord(response);
-  const items = asArray<Recipe>(value.items);
+  const items = asArray<Recipe>(value.items || value.recipes || value.results);
   return {
     ...(value as Partial<RecipeCatalogResponse>),
     items,
@@ -271,7 +277,7 @@ function normalizeRecipeCatalogResponse(response: unknown, source: RecipeCatalog
   };
 }
 
-function normalizeRecipeSuggestionResponse(response: unknown): RecipeSuggestionResponse {
+export function normalizeSuggestionsResponse(response: unknown): RecipeSuggestionResponse {
   const emptyGroups: RecipeSuggestionResponse["groups"] = {
     readyToCook: [],
     highlyRecommended: [],
@@ -322,6 +328,13 @@ function normalizeRecipeSuggestionResponse(response: unknown): RecipeSuggestionR
   };
 }
 
+export function normalizeShoppingListsResponse(response: unknown): ShoppingList[] {
+  if (Array.isArray(response)) return response.map(normalizeShoppingList);
+
+  const value = asRecord(response);
+  return asArray<ShoppingList>(value.items || value.lists || value.shoppingLists).map(normalizeShoppingList);
+}
+
 export async function getShoppingList(token: string, week: string) {
   const list = await request<ShoppingList>(`/shopping-list?week=${encodeURIComponent(week)}`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -351,7 +364,7 @@ export async function getShoppingLists(token: string) {
   const lists = await request<unknown>("/shopping-lists", {
     headers: { Authorization: `Bearer ${token}` }
   });
-  return asArray<ShoppingList>(lists).map(normalizeShoppingList);
+  return normalizeShoppingListsResponse(lists);
 }
 
 export async function getShoppingListDetail(token: string, id: string) {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CircleAlert, Loader2, Plus } from "lucide-react";
 import { InventoryPreview } from "@/components/dashboard/InventoryPreview";
 import { PageScaffold } from "@/components/ui/PageScaffold";
-import { getInventory, readAuthToken } from "@/lib/api";
+import { asArray, getInventory, readAuthToken } from "@/lib/api";
 import type { InventoryItem } from "@/types/domain";
 
 type Status = "loading" | "ready" | "missing-token" | "error";
@@ -22,7 +22,7 @@ export default function InventoryPage() {
 
     getInventory(token)
       .then((inventory) => {
-        setItems(inventory);
+        setItems(asArray<InventoryItem>(inventory));
         setStatus("ready");
       })
       .catch(() => setStatus("error"));

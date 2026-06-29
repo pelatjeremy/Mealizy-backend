@@ -8,14 +8,14 @@ import { NutritionPanel } from "@/components/dashboard/NutritionPanel";
 import { RecipeSuggestions } from "@/components/dashboard/RecipeSuggestions";
 import { ShoppingPreview } from "@/components/dashboard/ShoppingPreview";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { getInventory, getMealPlans, getRecipeSuggestions, getShoppingList, readAuthToken } from "@/lib/api";
-import type { InventoryItem, MealPlan, Recipe, ShoppingItem } from "@/types/domain";
+import { asArray, getInventory, getMealPlans, getRecipeSuggestions, getShoppingList, readAuthToken } from "@/lib/api";
+import type { InventoryItem, MealPlan, Recipe, RecipeSuggestion, ShoppingItem } from "@/types/domain";
 import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
 
 type Status = "loading" | "ready" | "missing-token" | "error";
 
 function toShoppingItems(items: ShoppingItem[] | undefined) {
-  return Array.isArray(items) ? items : [];
+  return asArray<ShoppingItem>(items);
 }
 
 export function DashboardClient() {
@@ -26,7 +26,7 @@ export function DashboardClient() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const week = useMemo(() => formatWeekParam(getWeekStart()), []);
   const remainingShoppingItems = useMemo(
-    () => (Array.isArray(shoppingItems) ? shoppingItems : []).filter((item) => !item.checked),
+    () => asArray<ShoppingItem>(shoppingItems).filter((item) => !item.checked),
     [shoppingItems]
   );
 
@@ -45,11 +45,11 @@ export function DashboardClient() {
         getRecipeSuggestions(token, { limit: 5 })
       ])
         .then(([inventoryItems, plans, shoppingList, suggestions]) => {
-          setInventory(Array.isArray(inventoryItems) ? inventoryItems : []);
-          setMealPlans(Array.isArray(plans) ? plans : []);
+          setInventory(asArray<InventoryItem>(inventoryItems));
+          setMealPlans(asArray<MealPlan>(plans));
           setShoppingItems(toShoppingItems(shoppingList.items));
           setRecipes(
-            (Array.isArray(suggestions.suggestions) ? suggestions.suggestions : []).map((suggestion) => ({
+            asArray<RecipeSuggestion>(suggestions.suggestions).map((suggestion) => ({
               ...suggestion.recipe,
               score: suggestion.score,
               missingCount: suggestion.missingCount

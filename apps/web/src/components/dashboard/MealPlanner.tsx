@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarPlus, ChefHat, ChevronLeft, ChevronRight, CircleAlert, Coffee, Loader2, MoreHorizontal, Moon, Pencil, ShoppingCart, Sun, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { createMealPlan, deleteMealPlan, generateMealPlanShoppingList, getMealPlans, getProfile, getRecipeSuggestions, readAuthToken, updateMealPlan } from "@/lib/api";
+import { asArray, createMealPlan, deleteMealPlan, generateMealPlanShoppingList, getMealPlans, getProfile, getRecipeSuggestions, readAuthToken, updateMealPlan } from "@/lib/api";
 import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelector";
 import type { MealPlan, MealType, Recipe, RecipeRecommendation, RecipeSuggestion, UserProfile } from "@/types/domain";
 
@@ -141,7 +141,7 @@ function SuggestionPicker({
   useEffect(() => {
     getRecipeSuggestions(token, { limit: 8, missingMax: 2 })
       .then((response) => {
-        setSuggestions(response.suggestions);
+        setSuggestions(asArray<RecipeSuggestion>(response.suggestions));
         setStatus("ready");
       })
       .catch(() => setStatus("error"));
@@ -215,7 +215,7 @@ export function MealPlanner() {
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
 
   const visibleMeals = useMemo(() => {
-    const enabledMealTypes = Array.isArray(profile?.enabledMealTypes) ? profile.enabledMealTypes : [];
+    const enabledMealTypes = asArray<MealType>(profile?.enabledMealTypes);
     const enabled = enabledMealTypes.length ? enabledMealTypes : mealRows.map((meal) => meal.key);
     const enabledSet = new Set(enabled);
     return mealRows.filter((meal) => enabledSet.has(meal.key) || meal.key === "lunch" || meal.key === "dinner");
@@ -234,7 +234,7 @@ export function MealPlanner() {
       try {
         const [userProfile, weekPlans] = await Promise.all([getProfile(authToken), getMealPlans(authToken, week)]);
         setProfile(userProfile);
-        setPlans(Array.isArray(weekPlans) ? weekPlans : []);
+        setPlans(asArray<MealPlan>(weekPlans));
         setStatus("ready");
       } catch {
         setStatus("error");
@@ -257,7 +257,7 @@ export function MealPlanner() {
     if (!token) return;
     try {
       await deleteMealPlan(token, plan._id);
-      setPlans((items) => (Array.isArray(items) ? items : []).filter((item) => item._id !== plan._id));
+      setPlans((items) => asArray<MealPlan>(items).filter((item) => item._id !== plan._id));
       setOpenMenuId(null);
     } catch {
       setStatus("error");
@@ -271,7 +271,7 @@ export function MealPlanner() {
 
     try {
       const updated = await updateMealPlan(token, plan._id, { servings: Number(value) });
-      setPlans((items) => items.map((item) => (item._id === updated._id ? updated : item)));
+      setPlans((items) => asArray<MealPlan>(items).map((item) => (item._id === updated._id ? updated : item)));
       setOpenMenuId(null);
     } catch {
       setStatus("error");
@@ -380,7 +380,7 @@ export function MealPlanner() {
           defaultServings={profile?.householdSize || 2}
           onClose={() => setPickerSlot(null)}
           onCreated={(plan) => {
-            setPlans((items) => [...(Array.isArray(items) ? items : []).filter((item) => item._id !== plan._id), plan]);
+            setPlans((items) => [...asArray<MealPlan>(items).filter((item) => item._id !== plan._id), plan]);
             setPickerSlot(null);
             setGeneratedList(null);
           }}

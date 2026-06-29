@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarPlus, CircleAlert, Loader2, ShoppingCart } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { createShoppingListFromRecipe, getApiErrorMessage, getProfile, getRecipe, getRecipeScore, readAuthToken } from "@/lib/api";
+import { asArray, createShoppingListFromRecipe, getApiErrorMessage, getProfile, getRecipe, getRecipeScore, readAuthToken } from "@/lib/api";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
-import type { Recipe, RecipeRecommendation, RecipeScore, RecipeScoreIngredient, UserProfile } from "@/types/domain";
+import type { Recipe, RecipeIngredient, RecipeRecommendation, RecipeScore, RecipeScoreIngredient, UserProfile } from "@/types/domain";
 
 type Status = "loading" | "ready" | "error";
 
@@ -23,7 +23,7 @@ function stripHtml(value = "") {
 }
 
 function uniqueLabels(values?: string[]) {
-  return [...new Set((values || []).map((value) => value.trim()).filter(Boolean))];
+  return [...new Set(asArray<string>(values).map((value) => value.trim()).filter(Boolean))];
 }
 
 function formatCompatibilityQuantity(value?: number, unit?: string) {
@@ -76,7 +76,12 @@ export default function RecipeDetailPage() {
   const source = useMemo(() => parseSource(searchParams.get("source")), [searchParams]);
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const labels = useMemo(
-    () => uniqueLabels([...(recipe?.categories || []), ...(recipe?.diets || []), ...(recipe?.cuisines || []), ...(recipe?.tags || [])]),
+    () => uniqueLabels([
+      ...asArray<string>(recipe?.categories),
+      ...asArray<string>(recipe?.diets),
+      ...asArray<string>(recipe?.cuisines),
+      ...asArray<string>(recipe?.tags)
+    ]),
     [recipe]
   );
 
@@ -172,7 +177,7 @@ export default function RecipeDetailPage() {
               <h3>Ingredients</h3>
               {recipe.ingredients?.length ? (
                 <ul className="recipe-detail-list">
-                  {recipe.ingredients.map((ingredient) => (
+                  {asArray<RecipeIngredient>(recipe.ingredients).map((ingredient) => (
                     <li key={`${ingredient.normalizedName}-${ingredient.unit}-${ingredient.quantity}`}>
                       <span>{ingredient.ingredientName}</span>
                       <strong>{formatQuantity(Number(ingredient.quantity || 0))} {ingredient.unit}</strong>
@@ -202,13 +207,13 @@ export default function RecipeDetailPage() {
                   </div>
                   <h4>Critiques manquants</h4>
                   <CompatibilityList
-                    items={[...recipeScore.missing, ...recipeScore.partial].filter((item) => item.importance === "essential")}
+                    items={[...asArray<RecipeScoreIngredient>(recipeScore.missing), ...asArray<RecipeScoreIngredient>(recipeScore.partial)].filter((item) => item.importance === "essential")}
                     emptyText="Aucun ingredient critique manquant."
                     partial
                   />
                   <h4>Secondaires manquants</h4>
                   <CompatibilityList
-                    items={[...recipeScore.missing, ...recipeScore.partial].filter((item) => item.importance !== "essential")}
+                    items={[...asArray<RecipeScoreIngredient>(recipeScore.missing), ...asArray<RecipeScoreIngredient>(recipeScore.partial)].filter((item) => item.importance !== "essential")}
                     emptyText="Aucun ingredient secondaire manquant."
                     partial
                   />
@@ -234,7 +239,7 @@ export default function RecipeDetailPage() {
             <h3>Preparation</h3>
             {recipe.instructions?.length ? (
               <ol className="recipe-steps">
-                {recipe.instructions.map((instruction, index) => <li key={`${index}-${instruction}`}>{instruction}</li>)}
+                {asArray<string>(recipe.instructions).map((instruction, index) => <li key={`${index}-${instruction}`}>{instruction}</li>)}
               </ol>
             ) : (
               <p>Etapes de preparation non renseignees.</p>
@@ -246,7 +251,7 @@ export default function RecipeDetailPage() {
               <h3>Materiel</h3>
               {recipe.requiredEquipments?.length ? (
                 <ul className="recipe-detail-list">
-                  {recipe.requiredEquipments.map((equipment) => <li key={equipment}><span>{equipment}</span></li>)}
+                  {asArray<string>(recipe.requiredEquipments).map((equipment) => <li key={equipment}><span>{equipment}</span></li>)}
                 </ul>
               ) : (
                 <p>Aucun materiel specifique renseigne.</p>

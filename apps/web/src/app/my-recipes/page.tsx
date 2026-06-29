@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarPlus, CircleAlert, Loader2, Pencil, Plus } from "lucide-react";
-import { getProfile, getRecipeCatalog, readAuthToken } from "@/lib/api";
+import { asArray, getProfile, getRecipeCatalog, readAuthToken } from "@/lib/api";
 import { RecipeFormModal } from "@/components/recipes/RecipeFormModal";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
@@ -23,7 +23,7 @@ export default function MyRecipesPage() {
     setStatus("loading");
     try {
       const result = await getRecipeCatalog(authToken, { source: "mine", page: 1, limit: 48 });
-      setRecipes(result.items);
+      setRecipes(asArray<Recipe>(result.items));
       setStatus("ready");
     } catch {
       setStatus("error");
@@ -42,14 +42,14 @@ export default function MyRecipesPage() {
   }, [loadRecipes]);
 
   function handleCreated(recipe: Recipe) {
-    setRecipes((items) => [recipe, ...items]);
+    setRecipes((items) => [recipe, ...asArray<Recipe>(items)]);
     setNotice("Recette creee avec succes.");
     setIsCreating(false);
   }
 
   function handleUpdated(recipe: Recipe) {
     const updatedRecipeId = recipeId(recipe);
-    setRecipes((items) => items.map((item) => (recipeId(item) === updatedRecipeId ? recipe : item)));
+    setRecipes((items) => asArray<Recipe>(items).map((item) => (recipeId(item) === updatedRecipeId ? recipe : item)));
     setNotice("Recette modifiee avec succes.");
     setEditingRecipe(null);
   }
@@ -68,12 +68,12 @@ export default function MyRecipesPage() {
 
       {status === "ready" && recipes.length > 0 && (
         <section className="recipe-catalog">
-          {recipes.map((recipe) => (
+          {asArray<Recipe>(recipes).map((recipe) => (
             <article className="recipe-card" key={recipe._id || recipe.id || recipe.title}>
               {recipe.image ? <img src={recipe.image} alt="" /> : <div className="recipe-image-placeholder">Mealizy</div>}
               <div>
                 <Link href={`/recipes/${encodeURIComponent(recipeId(recipe))}?source=user`}><strong>{recipe.title}</strong></Link>
-                <span>{recipe.preparationTime} min · {recipe.ingredients.length} ingredients · {recipe.servings} portions</span>
+                <span>{recipe.preparationTime} min · {asArray(recipe.ingredients).length} ingredients · {recipe.servings} portions</span>
                 <div className="recipe-card-actions">
                   <button className="outline-action" type="button" onClick={() => setEditingRecipe(recipe)}>
                     <Pencil size={17} /> Modifier

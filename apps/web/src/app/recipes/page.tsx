@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
-import { getProfile, getRecipeCatalog, readAuthToken } from "@/lib/api";
+import { asArray, getProfile, getRecipeCatalog, readAuthToken } from "@/lib/api";
 import { recipeId, RecipePlanningModal } from "@/components/recipes/RecipePlanningModal";
 import { PageScaffold } from "@/components/ui/PageScaffold";
 import type { Recipe, RecipeCatalogSource, UserProfile } from "@/types/domain";
@@ -117,7 +117,7 @@ export default function RecipesPage() {
       limit: 12
     })
       .then((result) => {
-        setRecipes(result.items);
+        setRecipes(asArray<Recipe>(result.items));
         setTotal(result.total);
         setStatus("ready");
       })
@@ -158,7 +158,7 @@ export default function RecipesPage() {
       {status === "ready" && (
         <>
           <section className="recipe-catalog">
-            {recipes.map((recipe) => (
+            {asArray<Recipe>(recipes).map((recipe) => (
               <RecipeCard
                 key={`${recipe.source}-${recipeId(recipe)}-${recipe.title}`}
                 recipe={recipe}

@@ -1,9 +1,11 @@
 import { Apple, Egg, Milk, Package2 } from "lucide-react";
+import { asArray } from "@/lib/api";
 import { InventoryItem } from "@/types/domain";
 
 const icons = [Apple, Egg, Package2, Package2, Milk];
 
 export function InventoryPreview({ items }: { items: InventoryItem[] }) {
+  const safeItems = asArray<InventoryItem>(items);
   return (
     <section className="panel">
       <div className="panel-header compact">
@@ -20,7 +22,7 @@ export function InventoryPreview({ items }: { items: InventoryItem[] }) {
           <tr><th>Produit</th><th>Quantité</th><th>Catégorie</th><th>Date de péremption</th></tr>
         </thead>
         <tbody>
-          {items.map((item, index) => {
+          {safeItems.map((item, index) => {
             const Icon = icons[index] || Package2;
             const itemName = item.name || item.ingredientId?.name || "Produit";
             const category = item.category || item.ingredientId?.category || "Autres";
