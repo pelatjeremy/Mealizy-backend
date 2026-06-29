@@ -215,7 +215,8 @@ export function MealPlanner() {
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
 
   const visibleMeals = useMemo(() => {
-    const enabled = profile?.enabledMealTypes?.length ? profile.enabledMealTypes : mealRows.map((meal) => meal.key);
+    const enabledMealTypes = Array.isArray(profile?.enabledMealTypes) ? profile.enabledMealTypes : [];
+    const enabled = enabledMealTypes.length ? enabledMealTypes : mealRows.map((meal) => meal.key);
     const enabledSet = new Set(enabled);
     return mealRows.filter((meal) => enabledSet.has(meal.key) || meal.key === "lunch" || meal.key === "dinner");
   }, [profile]);
@@ -233,7 +234,7 @@ export function MealPlanner() {
       try {
         const [userProfile, weekPlans] = await Promise.all([getProfile(authToken), getMealPlans(authToken, week)]);
         setProfile(userProfile);
-        setPlans(weekPlans);
+        setPlans(Array.isArray(weekPlans) ? weekPlans : []);
         setStatus("ready");
       } catch {
         setStatus("error");
@@ -256,7 +257,7 @@ export function MealPlanner() {
     if (!token) return;
     try {
       await deleteMealPlan(token, plan._id);
-      setPlans((items) => items.filter((item) => item._id !== plan._id));
+      setPlans((items) => (Array.isArray(items) ? items : []).filter((item) => item._id !== plan._id));
       setOpenMenuId(null);
     } catch {
       setStatus("error");
@@ -379,7 +380,7 @@ export function MealPlanner() {
           defaultServings={profile?.householdSize || 2}
           onClose={() => setPickerSlot(null)}
           onCreated={(plan) => {
-            setPlans((items) => [...items.filter((item) => item._id !== plan._id), plan]);
+            setPlans((items) => [...(Array.isArray(items) ? items : []).filter((item) => item._id !== plan._id), plan]);
             setPickerSlot(null);
             setGeneratedList(null);
           }}

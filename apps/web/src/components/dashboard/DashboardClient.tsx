@@ -15,7 +15,7 @@ import { formatWeekParam, getWeekStart } from "@/components/shopping/WeekSelecto
 type Status = "loading" | "ready" | "missing-token" | "error";
 
 function toShoppingItems(items: ShoppingItem[] | undefined) {
-  return items || [];
+  return Array.isArray(items) ? items : [];
 }
 
 export function DashboardClient() {
@@ -25,7 +25,10 @@ export function DashboardClient() {
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const week = useMemo(() => formatWeekParam(getWeekStart()), []);
-  const remainingShoppingItems = useMemo(() => shoppingItems.filter((item) => !item.checked), [shoppingItems]);
+  const remainingShoppingItems = useMemo(
+    () => (Array.isArray(shoppingItems) ? shoppingItems : []).filter((item) => !item.checked),
+    [shoppingItems]
+  );
 
   useEffect(() => {
     const token = readAuthToken();
@@ -42,11 +45,11 @@ export function DashboardClient() {
         getRecipeSuggestions(token, { limit: 5 })
       ])
         .then(([inventoryItems, plans, shoppingList, suggestions]) => {
-          setInventory(inventoryItems);
-          setMealPlans(plans);
+          setInventory(Array.isArray(inventoryItems) ? inventoryItems : []);
+          setMealPlans(Array.isArray(plans) ? plans : []);
           setShoppingItems(toShoppingItems(shoppingList.items));
           setRecipes(
-            suggestions.suggestions.map((suggestion) => ({
+            (Array.isArray(suggestions.suggestions) ? suggestions.suggestions : []).map((suggestion) => ({
               ...suggestion.recipe,
               score: suggestion.score,
               missingCount: suggestion.missingCount

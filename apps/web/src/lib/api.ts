@@ -6,6 +6,14 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const apiUrl = new URL(API_URL);
   const apiPath = apiUrl.pathname.endsWith("/") ? apiUrl.pathname.slice(0, -1) : apiUrl.pathname;
@@ -40,9 +48,10 @@ export async function getRecipeSuggestions(token: string, params: Record<string,
     if (value !== undefined && String(value).trim() !== "") query.set(key, String(value));
   });
 
-  return request<RecipeSuggestionResponse>(`/recipes/suggestions?${query.toString()}`, {
+  const response = await request<unknown>(`/recipes/suggestions?${query.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+  return normalizeRecipeSuggestionResponse(response);
 }
 
 export async function getRecipeCatalog(token: string, params: Record<string, string | number | undefined>) {
@@ -51,9 +60,10 @@ export async function getRecipeCatalog(token: string, params: Record<string, str
     if (value !== undefined && String(value).trim() !== "") query.set(key, String(value));
   });
 
-  return request<RecipeCatalogResponse>(`/recipes/catalog?${query.toString()}`, {
+  const response = await request<unknown>(`/recipes/catalog?${query.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+  return normalizeRecipeCatalogResponse(response, readCatalogSource(String(params.source || "all")));
 }
 
 export async function createRecipe(token: string, payload: {
@@ -178,15 +188,17 @@ export async function updateProfile(token: string, payload: {
 }
 
 export async function getInventory(token: string) {
-  return request<InventoryItem[]>("/inventory", {
+  const response = await request<unknown>("/inventory", {
     headers: { Authorization: `Bearer ${token}` }
   });
+  return asArray<InventoryItem>(response);
 }
 
 export async function getMealPlans(token: string, week: string) {
-  return request<MealPlan[]>(`/meal-plans?week=${encodeURIComponent(week)}`, {
+  const response = await request<unknown>(`/meal-plans?week=${encodeURIComponent(week)}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+  return asArray<MealPlan>(response);
 }
 
 export async function createMealPlan(
@@ -230,13 +242,83 @@ export async function generateMealPlanShoppingList(token: string, weekStart: str
   return normalizeShoppingList(list);
 }
 
-function normalizeShoppingList(list: ShoppingList): ShoppingList {
+function normalizeShoppingList(list: unknown): ShoppingList {
+  const value = asRecord(list);
+  const items = asArray<ShoppingList["items"][number]>(value.items);
   return {
-    ...list,
-    items: (list.items || []).map((item) => ({
+    ...(value as ShoppingList),
+    items: items.map((item) => ({
       ...item,
       id: item.id || item._id || ""
     }))
+  };
+}
+
+function normalizeRecipeCatalogResponse(response: unknown, source: RecipeCatalogSource): RecipeCatalogResponse {
+  if (Array.isArray(response)) {
+    return { items: response as Recipe[], total: response.length, page: 1, limit: response.length, source };
+  }
+
+  const value = asRecord(response);
+  const items = asArray<Recipe>(value.items);
+  return {
+    ...(value as Partial<RecipeCatalogResponse>),
+    items,
+    total: Number(value.total ?? items.length),
+    page: Number(value.page ?? 1),
+    limit: Number(value.limit ?? items.length),
+    source: readCatalogSource(String(value.source || source))
+  };
+}
+
+function normalizeRecipeSuggestionResponse(response: unknown): RecipeSuggestionResponse {
+  const emptyGroups: RecipeSuggestionResponse["groups"] = {
+    readyToCook: [],
+    highlyRecommended: [],
+    missingFewIngredients: [],
+    lowCompatibility: []
+  };
+
+  if (Array.isArray(response)) {
+    const suggestions = response as RecipeSuggestionResponse["suggestions"];
+    const groups = suggestions.reduce<RecipeSuggestionResponse["groups"]>((acc, suggestion) => {
+      if (suggestion.group && acc[suggestion.group]) acc[suggestion.group].push(suggestion);
+      return acc;
+    }, { ...emptyGroups });
+    return {
+      summary: {
+        totalRecipesAnalyzed: suggestions.length,
+        readyToCook: groups.readyToCook.length,
+        highlyRecommended: groups.highlyRecommended.length,
+        missingFewIngredients: groups.missingFewIngredients.length,
+        lowCompatibility: groups.lowCompatibility.length
+      },
+      suggestions,
+      groups
+    };
+  }
+
+  const value = asRecord(response);
+  const rawGroups = asRecord(value.groups);
+  const suggestions = asArray<RecipeSuggestionResponse["suggestions"][number]>(value.suggestions);
+  const groups: RecipeSuggestionResponse["groups"] = {
+    readyToCook: asArray(rawGroups.readyToCook),
+    highlyRecommended: asArray(rawGroups.highlyRecommended),
+    missingFewIngredients: asArray(rawGroups.missingFewIngredients),
+    lowCompatibility: asArray(rawGroups.lowCompatibility)
+  };
+  const summary = asRecord(value.summary);
+
+  return {
+    summary: {
+      totalRecipesAnalyzed: Number(summary.totalRecipesAnalyzed ?? suggestions.length),
+      readyToCook: Number(summary.readyToCook ?? groups.readyToCook.length),
+      highlyRecommended: Number(summary.highlyRecommended ?? groups.highlyRecommended.length),
+      missingFewIngredients: Number(summary.missingFewIngredients ?? groups.missingFewIngredients.length),
+      lowCompatibility: Number(summary.lowCompatibility ?? groups.lowCompatibility.length)
+    },
+    suggestions,
+    groups
   };
 }
 
@@ -266,10 +348,10 @@ export async function updateShoppingListItemChecked(token: string, id: string, c
 }
 
 export async function getShoppingLists(token: string) {
-  const lists = await request<ShoppingList[]>("/shopping-lists", {
+  const lists = await request<unknown>("/shopping-lists", {
     headers: { Authorization: `Bearer ${token}` }
   });
-  return lists.map(normalizeShoppingList);
+  return asArray<ShoppingList>(lists).map(normalizeShoppingList);
 }
 
 export async function getShoppingListDetail(token: string, id: string) {

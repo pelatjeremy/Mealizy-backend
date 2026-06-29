@@ -18,9 +18,10 @@ type Status = "loading" | "ready" | "missing-token" | "error";
 type Notice = { text: string; tone: "success" | "info" | "error" };
 
 function splitItems(items: ShoppingItem[]) {
+  const safeItems = Array.isArray(items) ? items : [];
   return {
-    toBuy: items.filter((item) => !item.checked),
-    bought: items.filter((item) => item.checked)
+    toBuy: safeItems.filter((item) => !item.checked),
+    bought: safeItems.filter((item) => item.checked)
   };
 }
 
@@ -35,7 +36,7 @@ export function ShoppingListManager() {
   const [isCompleting, setIsCompleting] = useState(false);
 
   const week = formatWeekParam(weekStart);
-  const items = shoppingList?.items || [];
+  const items = Array.isArray(shoppingList?.items) ? shoppingList.items : [];
   const { toBuy, bought } = useMemo(() => splitItems(items), [items]);
 
   const loadList = useCallback(async (authToken: string) => {

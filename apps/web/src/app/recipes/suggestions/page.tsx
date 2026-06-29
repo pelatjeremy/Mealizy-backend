@@ -118,7 +118,9 @@ export default function RecipeSuggestionsPage() {
   const [isCreatingShoppingList, setIsCreatingShoppingList] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "missing-token" | "error">("loading");
 
-  const topSuggestion = useMemo(() => response.suggestions[0], [response]);
+  const suggestions = Array.isArray(response.suggestions) ? response.suggestions : [];
+  const groups = response.groups || emptyResponse.groups;
+  const topSuggestion = useMemo(() => suggestions[0], [suggestions]);
 
   useEffect(() => {
     const authToken = readAuthToken();
@@ -213,13 +215,13 @@ export default function RecipeSuggestionsPage() {
           </section>
 
           {(["readyToCook", "highlyRecommended", "missingFewIngredients", "lowCompatibility"] as RecipeSuggestionGroup[]).map((group) => {
-            const suggestions = response.groups[group];
-            if (!suggestions.length) return null;
+            const groupSuggestions = Array.isArray(groups[group]) ? groups[group] : [];
+            if (!groupSuggestions.length) return null;
             return (
               <section className="suggestion-group-section" key={group}>
                 <h2>{groupLabels[group]}</h2>
                 <div className="suggestion-grid">
-                  {suggestions.map((suggestion) => (
+                  {groupSuggestions.map((suggestion) => (
                     <RecipeCard
                       key={`${suggestion.recipe.source}-${recipeId(suggestion.recipe)}-${suggestion.recipe.title}`}
                       suggestion={suggestion}
@@ -234,7 +236,7 @@ export default function RecipeSuggestionsPage() {
             );
           })}
 
-          {!response.suggestions.length && <div className="state-panel">Aucune suggestion ne correspond aux filtres.</div>}
+          {!suggestions.length && <div className="state-panel">Aucune suggestion ne correspond aux filtres.</div>}
         </>
       )}
 
