@@ -83,6 +83,8 @@ test("beta cleanup dry-run reports matches without deleting data", async () => {
     assert.equal(stub.calls.ingredientDeleteMany, 0);
     assert.equal(stub.calls.recipeUpdateOne, 0);
     assert.ok(stub.calls.recipeQueries.some((query) => query.$or?.some((entry) => entry.userId === "demo-user-id")));
+    assert.ok(stub.calls.recipeQueries.some((query) => query.$or?.some((entry) => entry.dishTypes)));
+    assert.ok(stub.calls.recipeQueries.some((query) => query.$or?.some((entry) => entry["metadata.createdBy"])));
   } finally {
     stub.restore();
   }

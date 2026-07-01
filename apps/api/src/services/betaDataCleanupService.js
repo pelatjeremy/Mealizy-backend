@@ -3,9 +3,9 @@ import { Recipe } from "../models/Recipe.js";
 import { User } from "../models/User.js";
 import { sanitizeRecipeData } from "../utils/recipeSanitizer.js";
 
-const markerPattern = /^(dashboard|demo|seed|test|dev)\b/i;
-const technicalTitlePattern = /\b(dashboard|seed|test|dev)\b|[0-9]{10,}/i;
-const technicalNamePattern = /^(dashboard|demo|seed|test|dev|prod|index)[-_ ]/i;
+const markerPattern = /^(dashboard|demo|seed|test|dev|placeholder)\b/i;
+const technicalTitlePattern = /\b(dashboard|seed|test|dev|placeholder)\b|prod[\s_-]*index|[0-9]{10,}/i;
+const technicalNamePattern = /^(dashboard|demo|seed|test|dev|prod|index|placeholder)[-_ ]/i;
 
 function recipeCleanupQuery(demoUserId) {
   return {
@@ -15,7 +15,12 @@ function recipeCleanupQuery(demoUserId) {
       { externalId: { $regex: /^demo-/i } },
       { title: { $regex: markerPattern } },
       { title: { $regex: technicalTitlePattern } },
-      { tags: { $in: ["demo", "test", "dev", "seed"] } },
+      { tags: { $in: ["demo", "test", "dev", "seed", "placeholder"] } },
+      { categories: { $in: ["demo", "test", "dev", "seed", "placeholder"] } },
+      { dishTypes: { $in: ["demo", "test", "dev", "seed", "placeholder"] } },
+      { "metadata.createdBy": { $in: ["demo", "test", "dev", "seed"] } },
+      { "importMetadata.createdBy": { $in: ["demo", "test", "dev", "seed"] } },
+      { "sourceMetadata.createdBy": { $in: ["demo", "test", "dev", "seed"] } },
       ...(demoUserId ? [{ userId: demoUserId }] : [])
     ]
   };
@@ -34,23 +39,45 @@ function ingredientCleanupQuery() {
 }
 
 function recipeSanitizeQuery() {
-  const marker = /(^|[\s_./-])(prod|production|index|idx|undefined|null|nan|seed|fixture|mock|test|demo|placeholder)([\s_./-]|$)|^(prod|index)[_-]?\d+$|^dashboard\s+pates\s+\d{8,}$/i;
+  const marker = /(^|[\s_./-])(prod|production|index|idx|undefined|null|nan|seed|fixture|mock|test|demo|dev|placeholder)([\s_./-]|$)|^(prod|index)[_-]?\d+$|^dashboard\s+pates\s+\d{8,}$/i;
   return {
     $or: [
+      { title: { $regex: marker } },
+      { name: { $regex: marker } },
       { summary: { $regex: marker } },
       { description: { $regex: marker } },
       { image: { $regex: marker } },
       { categories: { $regex: marker } },
+      { dishTypes: { $regex: marker } },
       { diets: { $regex: marker } },
       { cuisines: { $regex: marker } },
       { tags: { $regex: marker } },
       { instructions: { $regex: marker } },
       { requiredEquipments: { $regex: marker } },
       { "ingredients.displayName": { $regex: marker } },
+      { "ingredients.ingredientName": { $regex: marker } },
+      { "ingredients.name": { $regex: marker } },
       { "ingredients.originalName": { $regex: marker } },
+      { "ingredients.normalizedName": { $regex: marker } },
       { "ingredients.category": { $regex: marker } },
       { "ingredients.aisle": { $regex: marker } },
-      { "ingredients.image": { $regex: marker } }
+      { "ingredients.image": { $regex: marker } },
+      { "ingredients.sourceMetadata.provider": { $regex: marker } },
+      { "ingredients.sourceMetadata.nameClean": { $regex: marker } },
+      { "ingredients.sourceMetadata.originalName": { $regex: marker } },
+      { "ingredients.sourceMetadata.spoonacularName": { $regex: marker } },
+      { "metadata.createdBy": { $regex: marker } },
+      { "metadata.source": { $regex: marker } },
+      { "metadata.label": { $regex: marker } },
+      { "sourceMetadata.createdBy": { $regex: marker } },
+      { "sourceMetadata.source": { $regex: marker } },
+      { "sourceMetadata.label": { $regex: marker } },
+      { "importMetadata.createdBy": { $regex: marker } },
+      { "importMetadata.source": { $regex: marker } },
+      { "importMetadata.label": { $regex: marker } },
+      { "migrationMetadata.originalIngredientsBackup.displayName": { $regex: marker } },
+      { "migrationMetadata.originalIngredientsBackup.ingredientName": { $regex: marker } },
+      { "migrationMetadata.originalIngredientsBackup.originalName": { $regex: marker } }
     ]
   };
 }

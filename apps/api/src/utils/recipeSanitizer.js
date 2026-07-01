@@ -1,7 +1,7 @@
 import { normalizeIngredientName } from "./normalizeIngredient.js";
 import { normalizeUnit } from "./unitConversion.js";
 
-export const technicalTextPattern = /(^|[\s_./-])(prod|production|index|idx|undefined|null|nan|seed|fixture|mock|test|demo|placeholder)([\s_./-]|$)|^(prod|index)[_-]?\d+$|^dashboard\s+pates\s+\d{8,}$/i;
+export const technicalTextPattern = /(^|[\s_./-])(prod|production|index|idx|undefined|null|nan|seed|fixture|mock|test|demo|dev|placeholder)([\s_./-]|$)|^(prod|index)[_-]?\d+$|^dashboard\s+pates\s+\d{8,}$/i;
 
 export function isTechnicalText(value = "") {
   return technicalTextPattern.test(String(value || "").trim());
@@ -15,6 +15,35 @@ export function cleanDisplayText(value = "") {
 
 function cleanStringList(values = []) {
   return [...new Set((values || []).map(cleanDisplayText).filter(Boolean))];
+}
+
+function isPlainObject(value) {
+  return Object.prototype.toString.call(value) === "[object Object]";
+}
+
+function cleanMetadataValue(value) {
+  if (typeof value === "string") {
+    const cleaned = cleanDisplayText(value);
+    return cleaned || undefined;
+  }
+  if (Array.isArray(value)) {
+    const cleaned = value.map(cleanMetadataValue).filter((item) => item !== undefined);
+    return cleaned.length ? cleaned : undefined;
+  }
+  if (isPlainObject(value)) {
+    return cleanMetadataObject(value);
+  }
+  return value;
+}
+
+function cleanMetadataObject(metadata = {}) {
+  if (!isPlainObject(metadata)) return {};
+  return Object.fromEntries(
+    Object.entries(metadata)
+      .filter(([key]) => !isTechnicalText(key))
+      .map(([key, value]) => [key, cleanMetadataValue(value)])
+      .filter(([, value]) => value !== undefined)
+  );
 }
 
 function cleanIngredientName(value = "") {
@@ -46,7 +75,7 @@ function cleanIngredients(ingredients = []) {
         category: cleanDisplayText(ingredient.category) || "autres",
         aisle: cleanDisplayText(ingredient.aisle),
         image: isTechnicalText(ingredient.image) ? "" : String(ingredient.image || ""),
-        sourceMetadata: ingredient.sourceMetadata && typeof ingredient.sourceMetadata === "object" ? ingredient.sourceMetadata : {}
+        sourceMetadata: cleanMetadataObject(ingredient.sourceMetadata)
       };
     })
     .filter(Boolean);
@@ -63,9 +92,14 @@ export function sanitizeRecipeData(recipe = {}) {
     instructions: cleanStringList(recipe.instructions),
     requiredEquipments: cleanStringList(recipe.requiredEquipments),
     categories: cleanStringList(recipe.categories),
+    dishTypes: cleanStringList(recipe.dishTypes),
     diets: cleanStringList(recipe.diets),
     cuisines: cleanStringList(recipe.cuisines),
-    tags: cleanStringList(recipe.tags)
+    tags: cleanStringList(recipe.tags),
+    metadata: cleanMetadataObject(recipe.metadata),
+    sourceMetadata: cleanMetadataObject(recipe.sourceMetadata),
+    importMetadata: cleanMetadataObject(recipe.importMetadata),
+    migrationMetadata: cleanMetadataObject(recipe.migrationMetadata)
   };
 }
 
@@ -86,6 +120,7 @@ export function hasTechnicalRecipeData(recipe = {}) {
     recipe.description,
     recipe.image,
     ...(recipe.categories || []),
+    ...(recipe.dishTypes || []),
     ...(recipe.diets || []),
     ...(recipe.cuisines || []),
     ...(recipe.tags || []),
@@ -99,9 +134,21 @@ export function hasTechnicalRecipeData(recipe = {}) {
       ingredient.normalizedName,
       ingredient.category,
       ingredient.aisle,
-      ingredient.image
-    ])
+      ingredient.image,
+      ...collectMetadataStrings(ingredient.sourceMetadata)
+    ]),
+    ...collectMetadataStrings(recipe.metadata),
+    ...collectMetadataStrings(recipe.sourceMetadata),
+    ...collectMetadataStrings(recipe.importMetadata),
+    ...collectMetadataStrings(recipe.migrationMetadata)
   ].filter(Boolean);
 
   return fields.some((field) => isTechnicalText(field) || isTechnicalText(normalizeIngredientName(field)));
+}
+
+function collectMetadataStrings(value) {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectMetadataStrings);
+  if (isPlainObject(value)) return Object.entries(value).flatMap(([key, entry]) => [key, ...collectMetadataStrings(entry)]);
+  return [];
 }
