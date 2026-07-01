@@ -1,15 +1,5 @@
 import mongoose from "mongoose";
-import { env } from "./env.js";
-
-function maskMongoUri(uri = "") {
-  try {
-    const parsed = new URL(uri);
-    if (parsed.password) parsed.password = "***";
-    return parsed.toString();
-  } catch {
-    return uri.replace(/:\/\/([^:]+):([^@]+)@/, "://$1:***@");
-  }
-}
+import { env, maskMongoUri } from "./env.js";
 
 export async function connectDb() {
   mongoose.set("strictQuery", true);
